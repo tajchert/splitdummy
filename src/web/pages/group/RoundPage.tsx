@@ -10,7 +10,7 @@ import { nameOf, roundLabel } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
 import type { RoundOutletContext } from "./EntryDetail";
 import { RoundEntries } from "./EntriesPage";
-import { FreezeNote, groupBase, TransferCard } from "./parts";
+import { FreezeNote, groupBase, TransferCard, Who } from "./parts";
 import { RoundsSwitcher } from "./RoundsSwitcher";
 
 export function RoundPage() {
@@ -116,7 +116,9 @@ export function RoundPage() {
         <div className="card card-flush">
           {round.balances.map((b) => (
             <div key={b.memberId} className="row">
-              <span className="grow">{nameOf(view, b.memberId, { you: true })}</span>
+              <span className="grow">
+                <Who view={view} id={b.memberId} you />
+              </span>
               <Amount minor={b.net} code={code} exponent={exp} signed tone="auto" />
             </div>
           ))}

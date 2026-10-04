@@ -439,6 +439,15 @@
   background: var(--red-soft);
   color: var(--red);
 }
+.tone-deleted {
+  background: var(--surface2);
+  color: var(--ink2);
+  border: 1px dashed var(--line);
+}
+.member-deleted {
+  color: var(--ink2);
+  font-style: italic;
+}
 .avatar-ring {
   border: 2px solid var(--line);
 }

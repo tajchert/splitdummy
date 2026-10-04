@@ -13,7 +13,7 @@ import { activeMembers, nameOf, roundLabel } from "../../lib/project";
 import { describeChange } from "../../lib/reviewDiff";
 import { useProject, useView } from "../../state/project";
 import { freezeDayLabel, zoneNote } from "./FreezeDate";
-import { groupBase } from "./parts";
+import { groupBase, Who } from "./parts";
 
 export function Review() {
   const view = useView();
@@ -268,7 +268,9 @@ export function Review() {
               .sort((a, b) => Number(BigInt(b.net) - BigInt(a.net)))
               .map((b) => (
                 <div key={b.memberId} className="kv">
-                  <span>{nameOf(view, b.memberId, { you: true })}</span>
+                  <span>
+                    <Who view={view} id={b.memberId} you />
+                  </span>
                   <b>
                     <Amount minor={b.net} code={code} exponent={exp} signed tone="auto" />
                   </b>
@@ -295,7 +297,7 @@ export function Review() {
                 {review.proposedTransfers.map((t) => (
                   <div key={`${t.fromMemberId}-${t.toMemberId}`} className="plan-row">
                     <span>
-                      {nameOf(view, t.fromMemberId)} → {nameOf(view, t.toMemberId)}
+                      <Who view={view} id={t.fromMemberId} /> → <Who view={view} id={t.toMemberId} />
                     </span>
                     <b className="amount">{fmtMoney(t.amount, code, exp)}</b>
                   </div>

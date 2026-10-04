@@ -22,6 +22,7 @@ import {
   sortEntries,
   TaskCards,
   TransferCard,
+  Who,
 } from "./parts";
 import { FreezeDateNotice } from "./FreezeDate";
 import { RoundsSwitcher } from "./RoundsSwitcher";
@@ -407,7 +408,7 @@ function Settled({ view }: { view: ProjectViewDTO }) {
                   <div key={i.id} className="row done-row">
                     <Icon name="check_circle" size={18} className="green" />
                     <span className="grow">
-                      {nameOf(view, i.fromMemberId, { you: true })} → {nameOf(view, i.toMemberId, { you: true })}
+                      <Who view={view} id={i.fromMemberId} you /> → <Who view={view} id={i.toMemberId} you />
                     </span>
                     <b>
                       <Amount minor={i.amount} code={i.currency} exponent={i.exponent} />

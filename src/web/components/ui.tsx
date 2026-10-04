@@ -122,7 +122,7 @@ export function Avatar({ name, tone, size = 34, ready, dim }: { name: string; to
       style={{ width: size, height: size, fontSize: Math.round(size * 0.37) }}
       aria-hidden="true"
     >
-      {initial(name)}
+      {tone === "deleted" ? <Icon name="person_off" size={Math.round(size * 0.5)} /> : initial(name)}
       {ready && (
         <span className="avatar-check">
           <Icon name="check" size={12} weight={700} />

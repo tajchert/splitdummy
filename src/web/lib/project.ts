@@ -1,10 +1,12 @@
 import type { EntryDTO, InstructionDTO, MemberDTO, ProjectViewDTO, RoundViewDTO } from "@shared/api";
 
-export type Tone = "accent" | "blue" | "green" | "amber" | "red";
+export type Tone = "accent" | "blue" | "green" | "amber" | "red" | "deleted";
 const TONES: Tone[] = ["accent", "blue", "green", "amber", "red"];
 
 /** Stable avatar colour by join order, so the owner (first) gets the accent like in the design. */
 export function toneFor(view: Pick<ProjectViewDTO, "members">, memberId: string): Tone {
+  // Deleted accounts get a neutral placeholder instead of a colour.
+  if (view.members.find((m) => m.id === memberId)?.accountDeleted) return "deleted";
   const sorted = [...view.members].sort((a, b) => a.joinedAt.localeCompare(b.joinedAt) || a.id.localeCompare(b.id));
   const i = sorted.findIndex((m) => m.id === memberId);
   return TONES[(i < 0 ? 0 : i) % TONES.length]!;
@@ -24,6 +26,10 @@ export function nameOf(view: Pick<ProjectViewDTO, "members" | "me">, id: string 
     if (opts.you) return `${n} (you)`;
   }
   return n;
+}
+
+export function isDeleted(view: Pick<ProjectViewDTO, "members">, id: string | null | undefined): boolean {
+  return !!member(view, id)?.accountDeleted;
 }
 
 export function initial(name: string): string {

@@ -13,6 +13,7 @@ import {
   activeMembers,
   balanceOf,
   confirmedCount,
+  isDeleted,
   nameOf,
   notReadyAtFreeze,
   readinessOf,
@@ -26,6 +27,12 @@ import { noteSelfReadyChange } from "./selfChange";
 
 export function groupBase(projectId: string) {
   return `/g/${encodeURIComponent(projectId)}`;
+}
+
+/** A member's name; deleted accounts render muted. */
+export function Who({ view, id, you }: { view: ProjectViewDTO; id: string | null | undefined; you?: boolean }) {
+  const name = nameOf(view, id, { you });
+  return isDeleted(view, id) ? <span className="member-deleted">{name}</span> : <>{name}</>;
 }
 
 /* ---------- header ---------- */
@@ -192,7 +199,7 @@ export function EntryRow({ view, e, to }: { view: ProjectViewDTO; e: EntryDTO; t
           <span className="meta-item">
             <Icon name={e.type === "REFUND" ? "call_received" : e.type === "ADJUSTMENT" ? "edit_note" : "credit_card"} size={14} />
             <span className="sr-only">{e.type === "REFUND" ? "Received by" : e.type === "ADJUSTMENT" ? "Added by" : "Paid by"} </span>
-            {pname}
+            <Who view={view} id={payer} />
           </span>
           <span className="meta-item">
             <Icon name="group" size={14} />
@@ -432,7 +439,7 @@ export function TransferCard({ view, i }: { view: ProjectViewDTO; i: Instruction
       <div className="transfer-main">
         <div className="transfer-who-row">
           <span className="transfer-who">
-            {nameOf(view, i.fromMemberId, { you: true })} → {nameOf(view, i.toMemberId, { you: true })}
+            <Who view={view} id={i.fromMemberId} you /> → <Who view={view} id={i.toMemberId} you />
           </span>
           <b className="transfer-amt">
             <Amount minor={i.amount} code={i.currency} exponent={i.exponent} />
