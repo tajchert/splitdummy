@@ -14,8 +14,8 @@
     "e2e": "playwright test",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "cf-typegen": "wrangler types worker/worker-configuration.d.ts",
-    "deploy": "npm run build && wrangler deploy",
-    "deploy:staging": "npm run build && CLOUDFLARE_ENV=staging vite build && wrangler deploy --env staging"
+    "deploy": "scripts/deploy.sh production",
+    "deploy:staging": "scripts/deploy.sh staging"
   },
   "dependencies": {
     "hono": "4.13.13",
