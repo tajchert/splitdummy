@@ -16,6 +16,8 @@ esac
 
 npx tsc -b
 npx vite build
+# The Vite plugin copies local .dev.vars into the build output for `vite preview`; never ship it.
+rm -f dist/*/.dev.vars
 
 args=()
 if [[ "${2:-}" == "--init-secrets" ]]; then
