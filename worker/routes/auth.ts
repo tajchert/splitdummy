@@ -6,6 +6,7 @@ import {
   type MeDTO,
   type SignInRequestedDTO,
   type SignInVerifiedDTO,
+  UpdateMeSchema,
   VerifySignInSchema,
 } from "@shared/api";
 import type { Principal } from "../do/types";
@@ -18,7 +19,7 @@ import type { AppContext, AppEnv } from "../lib/context";
 import { projectIdsForPrincipal } from "../lib/directory";
 import { sendEmail, signInEmail } from "../lib/email";
 import { environmentOf, isLocal } from "../lib/env";
-import { ApiError } from "../lib/errors";
+import { ApiError, unauthenticated } from "../lib/errors";
 import { clientIp, parseWith, readJsonBody, safeNext } from "../lib/http";
 import { logError, logInfo } from "../lib/log";
 import { callProject } from "../lib/project";
@@ -38,15 +39,32 @@ authRoutes.get("/api/config", (c) => {
   return c.json(body);
 });
 
-authRoutes.get("/api/me", async (c) => {
-  const { principal } = await requireSession(c);
-  const body: MeDTO = {
+export function meDto(principal: PrincipalRow): MeDTO {
+  return {
     principalId: principal.id,
     kind: principal.kind,
     email: principal.email,
     displayName: principal.display_name,
   };
-  return c.json(body);
+}
+
+authRoutes.get("/api/me", async (c) => {
+  const { principal } = await requireSession(c);
+  return c.json(meDto(principal));
+});
+
+/** Account-level default name (prefills new groups). Existing group memberships keep their names. */
+authRoutes.patch("/api/me", async (c) => {
+  const { principal } = await requireSession(c);
+  await enforceLimit(c.env.RL_MUTATION, `principal:${principal.id}`);
+  const { displayName } = parseWith(UpdateMeSchema, await readJsonBody(c.req.raw));
+  const row = await c.env.DB.prepare(
+    "UPDATE principals SET display_name = ?, updated_at = ? WHERE id = ? RETURNING id, kind, email, display_name",
+  )
+    .bind(displayName, Date.now(), principal.id)
+    .first<PrincipalRow>();
+  if (!row) throw unauthenticated();
+  return c.json(meDto(row));
 });
 
 authRoutes.post("/api/auth/email", async (c) => {
