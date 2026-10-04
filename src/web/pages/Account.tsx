@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { UpdateMeSchema } from "@shared/api";
 import { useApi, useSession } from "../api/context";
 import { errorMessage } from "../api/errors";
 import { useSubmit } from "../api/idempotency";
@@ -63,6 +64,8 @@ function AccountInner() {
           )}
         </section>
 
+        <AccountName />
+
         {!me.email && <AttachEmail />}
 
         <section className="card" aria-labelledby="acc-theme">
@@ -114,6 +117,51 @@ function AccountInner() {
         )}
       </main>
     </>
+  );
+}
+
+/** Account-level name: the default for new groups. Each group keeps its own name. */
+function AccountName() {
+  const api = useApi();
+  const { me, setMe, refresh } = useSession();
+  const toast = useToast();
+  const { run, pending } = useSubmit();
+  const saved = me?.displayName ?? "";
+  const [name, setName] = useState(saved);
+  const [error, setError] = useState<string | undefined>();
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    const trimmed = name.trim();
+    const parsed = UpdateMeSchema.safeParse({ displayName: trimmed || null });
+    if (!parsed.success) return setError(parsed.error.issues[0]?.message);
+    try {
+      const updated = await run(parsed.data, (k) => api.updateMe(parsed.data, { idempotencyKey: k }));
+      if (updated) setMe(updated);
+      void refresh();
+      setName(trimmed);
+      toast(trimmed ? "Name saved" : "Name removed");
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  return (
+    <form className="card" onSubmit={onSubmit} noValidate aria-labelledby="acc-name">
+      <h2 id="acc-name" className="card-title">
+        Your name
+      </h2>
+      <div className="inline-form">
+        <Field label="Name" error={error} className="grow">
+          {(p) => (
+            <input {...p} className="input" value={name} maxLength={40} autoComplete="name" placeholder="For example: Maya" onChange={(e) => (setName(e.target.value), setError(undefined))} />
+          )}
+        </Field>
+        <button type="submit" className="btn btn-secondary btn-md" disabled={pending || name.trim() === saved}>
+          {pending ? "Saving…" : "Save"}
+        </button>
+      </div>
+      <p className="tiny muted">Filled in for you when you create a group. Each group keeps its own name, which you can change in that group's settings.</p>
+    </form>
   );
 }
 
