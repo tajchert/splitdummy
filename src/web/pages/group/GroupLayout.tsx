@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Link, Outlet, useParams } from "react-router";
 import { ProjectProvider, useProject } from "../../state/project";
 import { AppBar, PageLoading, useTitle } from "../../components/Shell";
@@ -69,7 +70,9 @@ function GroupFrame() {
           </>
         }
       />
-      <Outlet />
+      <Suspense fallback={<PageLoading />}>
+        <Outlet />
+      </Suspense>
     </>
   );
 }

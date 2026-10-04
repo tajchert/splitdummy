@@ -1,6 +1,13 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Icon } from "./ui";
 
+/** Older engines (and jsdom) lack showModal/close; fall back to the open attribute. */
+function closeDialog(d: HTMLDialogElement) {
+  if (!d.open) return;
+  if (typeof d.close === "function") d.close();
+  else d.removeAttribute("open");
+}
+
 /**
  * Modal built on <dialog>.showModal(): the browser traps focus, makes the page inert,
  * closes on Escape and returns focus to the opener. Full-screen sheet on phones,
@@ -38,7 +45,7 @@ export function Sheet({ title, onClose, headerAction, footer, children, size = "
     d.addEventListener("cancel", onCancel);
     return () => {
       d.removeEventListener("cancel", onCancel);
-      if (d.open) d.close();
+      closeDialog(d);
     };
   }, []);
 
@@ -103,7 +110,7 @@ export function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCanc
     d.addEventListener("cancel", onC);
     return () => {
       d.removeEventListener("cancel", onC);
-      if (d.open) d.close();
+      closeDialog(d);
     };
   }, []);
 
