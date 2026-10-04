@@ -5,6 +5,8 @@ import {
   type ConfigDTO,
   type MeDTO,
   type SignInRequestedDTO,
+  type SignInVerifiedDTO,
+  VerifySignInSchema,
 } from "@shared/api";
 import type { Principal } from "../do/types";
 import { getSession, requireSession } from "../auth/middleware";
@@ -15,7 +17,7 @@ import { verifyTurnstile } from "../auth/turnstile";
 import type { AppContext, AppEnv } from "../lib/context";
 import { projectIdsForPrincipal } from "../lib/directory";
 import { sendEmail, signInEmail } from "../lib/email";
-import { environmentOf, isLocal, isProduction } from "../lib/env";
+import { environmentOf, isLocal } from "../lib/env";
 import { ApiError } from "../lib/errors";
 import { clientIp, parseWith, readJsonBody, safeNext } from "../lib/http";
 import { logError, logInfo } from "../lib/log";
@@ -24,6 +26,8 @@ import { enforceLimit } from "../lib/ratelimit";
 
 /** Web route that explains an invalid/expired/used link (`?error=invalid`). */
 export const SIGN_IN_PAGE = "/signin";
+/** SPA page that reads `#token=` and POSTs it to /api/auth/verify. */
+export const CONFIRM_PAGE = "/auth/confirm";
 /** Landing page after sign-in when no `next` was given. */
 export const DEFAULT_NEXT = "/groups";
 
@@ -66,10 +70,21 @@ authRoutes.post("/api/me/email", async (c) => {
   return c.json(await sendLink(c, { email: input.email, purpose: "ATTACH", principalId: principal.id, next: null }));
 });
 
-authRoutes.get("/api/auth/verify", async (c) => {
+/**
+ * Legacy `?token=` links (sent before /auth/confirm existed). Consumes nothing: mail scanners
+ * prefetch GETs, so it only moves the token into the fragment of the SPA confirm page.
+ */
+authRoutes.get("/api/auth/verify", (c) => {
   c.header("Referrer-Policy", "no-referrer");
-  const row = await consumeSignInToken(c.env.DB, c.req.query("token") ?? "");
-  if (!row) return c.redirect(`${SIGN_IN_PAGE}?error=invalid`, 303);
+  const token = c.req.query("token") ?? "";
+  return c.redirect(token ? confirmPath(token) : `${SIGN_IN_PAGE}?error=invalid`, 303);
+});
+
+/** The SPA confirm page POSTs the fragment token here (origin-checked like every mutation). */
+authRoutes.post("/api/auth/verify", async (c) => {
+  const { token: linkToken } = parseWith(VerifySignInSchema, await readJsonBody(c.req.raw));
+  const row = await consumeSignInToken(c.env.DB, linkToken);
+  if (!row) throw new ApiError("SIGNIN_LINK_INVALID", "This sign-in link has expired or was already used. Request a new one.");
 
   const next = safeNext(row.next, DEFAULT_NEXT);
   let target: PrincipalRow | null = null;
@@ -78,7 +93,7 @@ authRoutes.get("/api/auth/verify", async (c) => {
   if (row.purpose === "ATTACH") {
     target = row.principal_id ? await upgradeGuest(c.env.DB, row.principal_id, row.email) : null;
     // Email already belongs to another principal (or guest changed meanwhile): keep the session.
-    if (!target) return c.redirect(withQuery(next, "error", "email_in_use"), 303);
+    if (!target) return c.json<SignInVerifiedDTO>({ next: withQuery(next, "error", "email_in_use") });
     upgraded = true;
   } else {
     target = await findByEmail(c.env.DB, row.email);
@@ -97,7 +112,7 @@ authRoutes.get("/api/auth/verify", async (c) => {
 
   if (upgraded) c.executionCtx.waitUntil(notifyPrincipalUpdated(c.env, toPrincipal(target), c.get("requestId")));
   logInfo("signed in", { requestId: c.get("requestId"), purpose: row.purpose, upgraded });
-  return c.redirect(next, 303);
+  return c.json<SignInVerifiedDTO>({ next });
 });
 
 authRoutes.post("/api/auth/logout", async (c) => {
@@ -121,13 +136,20 @@ async function sendLink(
   const token = await issueSignInToken(c.env.DB, opts);
   // Local dev serves the app from whatever localhost port the browser used.
   const origin = isLocal(c.env) ? new URL(c.req.url).origin : c.env.APP_ORIGIN;
-  const link = `${origin}/api/auth/verify?token=${encodeURIComponent(token)}`;
+  const link = `${origin}${confirmPath(token)}`;
   const sent = await sendEmail(c.env, opts.email, signInEmail(link, opts.purpose));
-  if (!sent && isProduction(c.env)) {
-    throw new ApiError("INTERNAL", "We couldn't send the email. Please try again in a moment.");
+  if (!isLocal(c.env)) {
+    // Staging/production have no devLink fallback, so an unsent email is a hard failure.
+    if (!sent) throw new ApiError("INTERNAL", "We couldn't send the email. Please try again in a moment.");
+    return { sent: true };
   }
-  // Outside production the link is returned for local/staging testing; never logged.
-  return isProduction(c.env) ? { sent: true } : { sent: true, devLink: link };
+  // Local dev/tests only: hand the link back (never logged) since there may be no inbox.
+  return { sent: true, devLink: link };
+}
+
+/** Token lives in the fragment so it never reaches server logs, referrers, or link scanners. */
+function confirmPath(token: string): string {
+  return `${CONFIRM_PAGE}#token=${encodeURIComponent(token)}`;
 }
 
 function withQuery(path: string, key: string, value: string): string {
