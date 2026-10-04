@@ -1,0 +1,85 @@
+/* Splitdummy design tokens — option 1a "Paper ledger" (design/SplitDummy.dc.html). */
+:root {
+  color-scheme: light;
+  --bg: #f7f2ea;
+  --surface: #fffcf7;
+  --surface2: #efe7da;
+  --ink: #2a2420;
+  --ink2: #6b6058;
+  --line: #e2d8c8;
+  --accent: #c24e28;
+  --accent-soft: #f7ddcf;
+  --accent-ink: #8a3215;
+  --on-accent: #ffffff;
+  --amber: #8a5a0b;
+  --amber-soft: #f5e6c8;
+  --blue: #2f5596;
+  --blue-soft: #dde5f2;
+  --green: #2d6e4e;
+  --green-soft: #d9ebdf;
+  --red: #a83a30;
+  --red-soft: #f6dcd7;
+  --shade: rgba(42, 36, 32, 0.06);
+  --scrim: rgba(28, 24, 21, 0.35);
+  --focus: #2f5596;
+
+  --font: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r-sm: 10px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --gutter: 18px;
+  --desktop: 1120px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #1c1815;
+    --surface: #26211d;
+    --surface2: #302924;
+    --ink: #f3ece2;
+    --ink2: #b7aa9a;
+    --line: #3b332d;
+    --accent: #ec7b53;
+    --accent-soft: #4a2a1e;
+    --accent-ink: #f6bda4;
+    --on-accent: #1c1815;
+    --amber: #e6be6a;
+    --amber-soft: #3a2f1a;
+    --blue: #9db6e8;
+    --blue-soft: #212c42;
+    --green: #8ccba5;
+    --green-soft: #1e3529;
+    --red: #f09a8f;
+    --red-soft: #43221e;
+    --shade: rgba(0, 0, 0, 0.3);
+    --scrim: rgba(0, 0, 0, 0.55);
+    --focus: #9db6e8;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1815;
+  --surface: #26211d;
+  --surface2: #302924;
+  --ink: #f3ece2;
+  --ink2: #b7aa9a;
+  --line: #3b332d;
+  --accent: #ec7b53;
+  --accent-soft: #4a2a1e;
+  --accent-ink: #f6bda4;
+  --on-accent: #1c1815;
+  --amber: #e6be6a;
+  --amber-soft: #3a2f1a;
+  --blue: #9db6e8;
+  --blue-soft: #212c42;
+  --green: #8ccba5;
+  --green-soft: #1e3529;
+  --red: #f09a8f;
+  --red-soft: #43221e;
+  --shade: rgba(0, 0, 0, 0.3);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --focus: #9db6e8;
+}
