@@ -42,6 +42,11 @@ export type DoOp =
   | "startRound"
   | "getHistory"
   | "exportCsv" // returns body as CSV string with content-type header
+  | "renameMe" // body: RenameMemberSchema
+  | "setFreezeSchedule" // body: FreezeScheduleSchema
+  | "accountDeletionInfo" // internal (edge, no idempotency): principal = the deleting account → { role: "OWNER"|"MEMBER"|"NONE", name, memberCount, hasOpenTransfers }
+  | "deleteProject" // internal: principal must be owner → { memberPrincipalIds: string[] }, then wipes all DO storage (deleteAll) and alarms
+  | "anonymizeMember" // internal: principal = deleting account → marks member accountDeleted, displayName "Deleted account", status LEFT if collecting; audited MEMBER_ACCOUNT_DELETED
   | "backupSnapshot" // internal (principal null, edge cron only): full JSON dump of all tables for R2
   | "principalUpdated"; // edge notifies that a principal attached a verified email; body: Principal
 

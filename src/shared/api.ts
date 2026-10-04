@@ -45,6 +45,7 @@ export type ApiErrorCode =
   | "MEMBER_REFERENCED"
   | "INVITE_INVALID"
   | "INVALID_TRANSITION"
+  | "ACCOUNT_HAS_OPEN_TRANSFERS"
   | "RATE_LIMITED"
   | "TURNSTILE_FAILED"
   | "LIMIT_EXCEEDED"
@@ -114,6 +115,8 @@ export interface MemberDTO {
   status: "ACTIVE" | "LEFT" | "REMOVED";
   /** True when any ledger entry or settlement references this member. */
   referenced: boolean;
+  /** The member's account was deleted; displayName is then a neutral placeholder ("Deleted account"). */
+  accountDeleted: boolean;
 }
 
 export interface RoundDTO {
@@ -127,6 +130,13 @@ export interface RoundDTO {
   settledAt: string | null;
   earlyFreezeReason: string | null;
   frozenByMemberId: string | null;
+  /** Owner-scheduled freeze (COLLECTING only). Date as picked + IANA zone; freezes at the END of that day in that zone. */
+  scheduledFreezeDate: string | null;
+  scheduledFreezeTimeZone: string | null;
+  /** ISO instant when the scheduled freeze fires (start of the next day in scheduledFreezeTimeZone). */
+  scheduledFreezeAt: string | null;
+  /** True when this round was frozen automatically by the schedule. */
+  frozenBySchedule: boolean;
 }
 
 export interface AmountSplitDTO {
@@ -404,6 +414,36 @@ export const InstructionActionSchema = z.object({
   note: z.string().trim().max(280).optional(),
 });
 
+/** PATCH /api/me → MeDTO. Account-level default name (prefills new groups). null clears it. */
+export const UpdateMeSchema = z.object({ displayName: DisplayNameSchema.nullable() });
+
+/** PATCH /api/projects/:projectId/members/me → MemberDTO. Own name inside one group; audited as MEMBER_RENAMED. */
+export const RenameMemberSchema = z.object({ displayName: DisplayNameSchema });
+
+/**
+ * PUT /api/projects/:projectId/rounds/:roundId/freeze-schedule → RoundDTO. Owner only, COLLECTING only.
+ * date null clears. date must be today or later in timeZone. Audited FREEZE_SCHEDULED / FREEZE_SCHEDULE_CLEARED.
+ * When the instant passes, the DO freezes the round exactly like an owner freeze (not-ready members are recorded,
+ * earlyFreezeReason "Scheduled freeze date reached" when anyone wasn't ready), with frozenBySchedule = true.
+ */
+export const FreezeScheduleSchema = z.object({
+  date: DateSchema.nullable(),
+  timeZone: z.string().min(1).max(64),
+});
+
+/** DELETE /api/me → OkDTO (clears session cookie). Body must confirm. 409 ACCOUNT_HAS_OPEN_TRANSFERS when blocked. */
+export const DeleteAccountSchema = z.object({ confirm: z.literal("DELETE") });
+
+/** GET /api/me/deletion-preview */
+export interface DeletionPreviewDTO {
+  /** Groups you own — deleted entirely, for every member. */
+  ownedProjects: { id: string; name: string; memberCount: number }[];
+  /** Groups you joined — kept; your name there becomes "Deleted account". */
+  memberProjects: { id: string; name: string }[];
+  /** Joined groups where you still have unconfirmed transfers (as sender or recipient); deletion is blocked until they are confirmed. */
+  blockingProjects: { id: string; name: string }[];
+}
+
 export const TransferOwnershipSchema = z.object({ toMemberId: IdSchema });
 
 // ---------- endpoints (reference) ----------
@@ -415,6 +455,10 @@ export const ENDPOINTS = {
   verifySignIn: "POST /api/auth/verify", // { token } -> SignInVerifiedDTO + session cookie; 410 SIGNIN_LINK_INVALID
   signOut: "POST /api/auth/logout",
   attachEmail: "POST /api/me/email",
+  updateMe: "PATCH /api/me", // -> MeDTO
+  deletionPreview: "GET /api/me/deletion-preview", // -> DeletionPreviewDTO
+  deleteAccount: "DELETE /api/me", // -> OkDTO
+  renameMe: "PATCH /api/projects/:projectId/members/me", // -> MemberDTO
   listProjects: "GET /api/projects",
   createProject: "POST /api/projects", // -> ProjectViewDTO
   getProject: "GET /api/projects/:projectId", // -> ProjectViewDTO
@@ -436,6 +480,7 @@ export const ENDPOINTS = {
   readiness: "PUT /api/projects/:projectId/rounds/:roundId/readiness/me",
   review: "GET /api/projects/:projectId/rounds/:roundId/review",
   freeze: "POST /api/projects/:projectId/rounds/:roundId/freeze",
+  freezeSchedule: "PUT /api/projects/:projectId/rounds/:roundId/freeze-schedule", // -> RoundDTO
   getRound: "GET /api/projects/:projectId/rounds/:roundId", // -> RoundViewDTO (historical)
   sent: "POST /api/projects/:projectId/rounds/:roundId/instructions/:instructionId/sent",
   received: "POST /api/projects/:projectId/rounds/:roundId/instructions/:instructionId/received",
