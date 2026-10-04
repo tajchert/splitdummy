@@ -108,6 +108,10 @@
 .page-narrow {
   max-width: 560px;
 }
+.page-head-close {
+  align-items: center;
+  padding-top: 6px;
+}
 .page-mid {
   max-width: 760px;
 }
