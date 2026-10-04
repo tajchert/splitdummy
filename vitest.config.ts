@@ -21,7 +21,7 @@ export default defineConfig({
           cloudflareTest({
             wrangler: { configPath: "./wrangler.jsonc" },
             miniflare: {
-              // The pool's bundled workerd lags wrangler's; pin a date it supports.
+              // vitest-pool-workers bundles an older workerd (max 2026-08-22)
               compatibilityDate: "2026-08-22",
               bindings: {
                 ENVIRONMENT: "test",
