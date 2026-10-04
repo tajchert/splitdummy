@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `npm run dev`. Local dev relaxes Origin checks to localhost,
+# returns devLink from sign-in, and tolerates a missing Email Service.
+ENVIRONMENT=development
+APP_ORIGIN=http://localhost:5173
+# Cloudflare's documented always-pass Turnstile test keys.
+TURNSTILE_SITE_KEY=1x00000000000000000000AA
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA

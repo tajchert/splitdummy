@@ -329,6 +329,7 @@ export const PutRateSchema = z.object({
 export const JoinSchema = z.object({
   token: z.string().min(16).max(200),
   displayName: DisplayNameSchema,
+  turnstileToken: z.string().max(4096).optional(),
 });
 
 export const ConversionRequestSchema = z.discriminatedUnion("method", [
