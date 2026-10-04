@@ -50,9 +50,9 @@ export function parseWith<S extends z.ZodType>(schema: S, value: unknown): z.out
 }
 
 /** `next` redirect target: same-origin relative path only (no `//host`, no backslashes). */
-export function safeNext(next: string | null | undefined): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
-  if (/[\\\u0000-\u001f\u007f]/.test(next)) return "/";
+export function safeNext(next: string | null | undefined, fallback = "/"): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return fallback;
+  if (/[\\\u0000-\u001f\u007f]/.test(next)) return fallback;
   return next;
 }
 

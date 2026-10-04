@@ -13,7 +13,10 @@ import { recordMembership } from "./projects";
 
 const SECRET_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
-/** Invitation tokens are `${projectId}.${secret}`; the edge only routes, the DO validates the secret. */
+/**
+ * Invitation tokens are `${projectId}.${secret}`. The edge routes by the prefix and forwards the
+ * full token as params.tokenSecret; the DO checks the prefix matches and validates the secret.
+ */
 export function parseInviteToken(token: string): { projectId: string; tokenSecret: string } {
   const dot = token.indexOf(".");
   const projectId = dot > 0 ? token.slice(0, dot) : "";
@@ -21,7 +24,7 @@ export function parseInviteToken(token: string): { projectId: string; tokenSecre
   if (!PROJECT_ID_RE.test(projectId) || !SECRET_RE.test(tokenSecret)) {
     throw new ApiError("INVITE_INVALID", "This invitation link isn't valid.");
   }
-  return { projectId, tokenSecret };
+  return { projectId, tokenSecret: token };
 }
 
 export const invitationRoutes = new Hono<AppEnv>();

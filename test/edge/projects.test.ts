@@ -128,7 +128,7 @@ describe("invitations", () => {
 
     const join = calls.find((c) => c.op === "join");
     expect(join).toMatchObject({
-      params: { projectId: P, tokenSecret: "S".repeat(43) },
+      params: { projectId: P, tokenSecret: token },
       body: { displayName: "Bob" },
       idempotencyKey: "join-key-1",
       principal: { kind: "GUEST", email: null, hasRecoverableAccount: false },
@@ -183,7 +183,7 @@ describe("invitations", () => {
     const { calls } = mockProjectDO(() => ({ status: 200, body: { projectName: "Trip", baseCurrency: "PLN", status: "OPEN", alreadyMemberProjectId: null } }));
     const res = await call(`/api/invitations/${encodeURIComponent(token)}`);
     expect(res.status).toBe(200);
-    expect(calls[0]).toMatchObject({ op: "previewInvite", principal: null, params: { projectId: P, tokenSecret: "S".repeat(43) } });
+    expect(calls[0]).toMatchObject({ op: "previewInvite", principal: null, params: { projectId: P, tokenSecret: token } });
   });
 
   it("preview passes the principal when signed in", async () => {

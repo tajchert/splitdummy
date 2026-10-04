@@ -22,8 +22,10 @@ import { logError, logInfo } from "../lib/log";
 import { callProject } from "../lib/project";
 import { enforceLimit } from "../lib/ratelimit";
 
-/** Web route that explains an invalid/expired link (query `error=`). */
+/** Web route that explains an invalid/expired/used link (`?error=invalid`). */
 export const SIGN_IN_PAGE = "/signin";
+/** Landing page after sign-in when no `next` was given. */
+export const DEFAULT_NEXT = "/groups";
 
 export const authRoutes = new Hono<AppEnv>();
 
@@ -51,7 +53,7 @@ authRoutes.post("/api/auth/email", async (c) => {
   // email already has an account). Binding the target at request time stops a stranger's link
   // from attaching their email to whoever happens to click it.
   const guest = session && session.principal.kind === "GUEST" && session.principal.email === null ? session.principal.id : null;
-  return c.json(await sendLink(c, { email: input.email, purpose: "SIGN_IN", principalId: guest, next: safeNext(input.next) }));
+  return c.json(await sendLink(c, { email: input.email, purpose: "SIGN_IN", principalId: guest, next: input.next ?? null }));
 });
 
 authRoutes.post("/api/me/email", async (c) => {
@@ -61,15 +63,15 @@ authRoutes.post("/api/me/email", async (c) => {
     throw new ApiError("INVALID_TRANSITION", "This account already has a verified email.");
   }
   await guardEmailRequest(c, input.email, input.turnstileToken);
-  return c.json(await sendLink(c, { email: input.email, purpose: "ATTACH", principalId: principal.id, next: "/" }));
+  return c.json(await sendLink(c, { email: input.email, purpose: "ATTACH", principalId: principal.id, next: null }));
 });
 
 authRoutes.get("/api/auth/verify", async (c) => {
   c.header("Referrer-Policy", "no-referrer");
   const row = await consumeSignInToken(c.env.DB, c.req.query("token") ?? "");
-  if (!row) return c.redirect(`${SIGN_IN_PAGE}?error=link_invalid`, 303);
+  if (!row) return c.redirect(`${SIGN_IN_PAGE}?error=invalid`, 303);
 
-  const next = safeNext(row.next);
+  const next = safeNext(row.next, DEFAULT_NEXT);
   let target: PrincipalRow | null = null;
   let upgraded = false;
 
@@ -114,7 +116,7 @@ async function guardEmailRequest(c: AppContext, email: string, turnstileToken: s
 
 async function sendLink(
   c: AppContext,
-  opts: { email: string; purpose: SignInPurpose; principalId: string | null; next: string },
+  opts: { email: string; purpose: SignInPurpose; principalId: string | null; next: string | null },
 ): Promise<SignInRequestedDTO> {
   const token = await issueSignInToken(c.env.DB, opts);
   // Local dev serves the app from whatever localhost port the browser used.
@@ -143,7 +145,6 @@ export async function notifyPrincipalUpdated(env: Env, principal: Principal, req
           projectId,
           principal,
           body: principal,
-          idempotencyKey: `principalUpdated:${principal.principalId}`,
           requestId,
         });
       } catch (err) {

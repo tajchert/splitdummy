@@ -46,6 +46,11 @@ describe("magic-link sign-in", () => {
     expect(await me.json()).toMatchObject({ kind: "ACCOUNT", email, displayName: null });
   });
 
+  it("redirects to /groups when no next was given", async () => {
+    const { path } = await requestLink(uniqueEmail());
+    expect((await call(path)).headers.get("location")).toBe("/groups");
+  });
+
   it("cookie is HttpOnly, SameSite=Lax, Path=/ and __Host-/Secure over HTTPS", async () => {
     const { path } = await requestLink(uniqueEmail());
     const res = await call(path, { base: "https://localhost" });
@@ -63,7 +68,7 @@ describe("magic-link sign-in", () => {
     expect((await call(path)).status).toBe(303);
     const again = await call(path);
     expect(again.status).toBe(303);
-    expect(again.headers.get("location")).toBe("/signin?error=link_invalid");
+    expect(again.headers.get("location")).toBe("/signin?error=invalid");
     expect(sessionCookie(again)).toBeNull();
   });
 
@@ -79,18 +84,18 @@ describe("magic-link sign-in", () => {
       .bind(Date.now() - 1, await sha256Hex(token))
       .run();
     const res = await call(path);
-    expect(res.headers.get("location")).toBe("/signin?error=link_invalid");
+    expect(res.headers.get("location")).toBe("/signin?error=invalid");
   });
 
   it("garbage tokens are rejected", async () => {
     const res = await call("/api/auth/verify?token=nope");
-    expect(res.headers.get("location")).toBe("/signin?error=link_invalid");
+    expect(res.headers.get("location")).toBe("/signin?error=invalid");
   });
 
   it("never redirects off-site, even with backslash tricks", async () => {
     const { path } = await requestLink(uniqueEmail(), { next: "/\\evil.example" });
     const res = await call(path);
-    expect(res.headers.get("location")).toBe("/");
+    expect(res.headers.get("location")).toBe("/groups");
   });
 
   it("rejects protocol-relative next at validation", async () => {
@@ -217,7 +222,7 @@ describe("guest upgrade", () => {
     const res = await call("/api/me/email", { body: { email, turnstileToken: "ok" }, cookie: guest.cookie });
     const { devLink } = await res.json<{ devLink: string }>();
     const verify = await call(new URL(devLink).pathname + new URL(devLink).search, { cookie: guest.cookie });
-    expect(verify.headers.get("location")).toBe("/?error=email_in_use");
+    expect(verify.headers.get("location")).toBe("/groups?error=email_in_use");
     expect(sessionCookie(verify)).toBeNull();
     const me = await (await call("/api/me", { cookie: guest.cookie })).json<{ kind: string }>();
     expect(me.kind).toBe("GUEST");
