@@ -68,7 +68,7 @@ function CreateGroupInner() {
       navigate(`/g/${encodeURIComponent(view.project.id)}`, { replace: true, state: { justCreated: true } });
     } catch (err) {
       if (err instanceof ApiError && err.code === "TURNSTILE_FAILED") ts.current?.reset();
-      if (err instanceof ApiError && err.status === 401) {
+      if (err instanceof ApiError && (err.status === 401 || err.details?.reason === "ACCOUNT_REQUIRED")) {
         navigate(`/signin?next=%2Fgroups%2Fnew&reason=account`);
         return;
       }

@@ -80,7 +80,7 @@ export function SignIn() {
 
         {linkError && (
           <Banner tone="amber" icon="schedule" role="alert">
-            {linkError === "expired" ? "That sign-in link has expired or was already used." : "That sign-in link isn't valid."}
+            That sign-in link has expired, was already used, or isn't valid.
             <p>Links work once and for 15 minutes. Request a new one below.</p>
           </Banner>
         )}

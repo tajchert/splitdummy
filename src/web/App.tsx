@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from "react";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router";
 import { ApiProvider } from "./api/context";
 import type { Api } from "./api/types";
 import { ToastProvider } from "./components/Toast";
@@ -26,6 +26,12 @@ const Settings = lazy(() => import("./pages/group/Settings").then((m) => ({ defa
 const Correction = lazy(() => import("./pages/group/Correction").then((m) => ({ default: m.Correction })));
 const AuthConfirm = lazy(() => import("./pages/AuthConfirm").then((m) => ({ default: m.AuthConfirm })));
 
+/** Notification emails link to /projects/:id; the app's group route is /g/:id. */
+function ProjectRedirect() {
+  const { projectId = "" } = useParams();
+  return <Navigate to={`/g/${encodeURIComponent(projectId)}`} replace />;
+}
+
 export function AppRoutes() {
   return (
     <Suspense fallback={<PageLoading />}>
@@ -39,6 +45,7 @@ export function AppRoutes() {
         <Route path="/groups/new" element={<CreateGroup />} />
         <Route path="/join" element={<Join />} />
         <Route path="/join/:token" element={<Join />} />
+        <Route path="/projects/:projectId" element={<ProjectRedirect />} />
         <Route path="/g/:projectId" element={<GroupLayout />}>
           <Route element={<GroupHome />}>
             <Route index element={null} />
