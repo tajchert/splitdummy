@@ -63,10 +63,10 @@ const STATUS: Record<RoundStatus | "DISPUTED", { label: string; cls: string }> =
   DISPUTED: { label: "Disputed", cls: "pill-red pill-square" },
 };
 
-export function StatusPill({ status }: { status: RoundStatus | "DISPUTED" }) {
+export function StatusPill({ status, small }: { status: RoundStatus | "DISPUTED"; small?: boolean }) {
   const s = STATUS[status];
   return (
-    <span className={`pill ${s.cls}`}>
+    <span className={`pill ${s.cls}${small ? " pill-xs" : ""}`}>
       <span className="pill-dot" aria-hidden="true" />
       {s.label}
     </span>
@@ -122,7 +122,7 @@ export function Avatar({ name, tone, size = 34, ready, dim }: { name: string; to
       style={{ width: size, height: size, fontSize: Math.round(size * 0.37) }}
       aria-hidden="true"
     >
-      {initial(name)}
+      {tone === "deleted" ? <Icon name="person_off" size={Math.round(size * 0.5)} /> : initial(name)}
       {ready && (
         <span className="avatar-check">
           <Icon name="check" size={12} weight={700} />

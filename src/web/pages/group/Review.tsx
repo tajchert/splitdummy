@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { ReviewDTO } from "@shared/api";
 import { useApi } from "../../api/context";
 import { ApiError, errorMessage } from "../../api/errors";
@@ -12,7 +12,8 @@ import { fmtMoney, plural } from "../../lib/format";
 import { activeMembers, nameOf, roundLabel } from "../../lib/project";
 import { describeChange } from "../../lib/reviewDiff";
 import { useProject, useView } from "../../state/project";
-import { groupBase } from "./parts";
+import { freezeDayLabel, zoneNote } from "./FreezeDate";
+import { groupBase, Who } from "./parts";
 
 export function Review() {
   const view = useView();
@@ -102,7 +103,9 @@ export function Review() {
   const notReady = review.notReadyMemberIds;
   const notReadyNames = notReady.map((id) => nameOf(view, id)).join(", ");
   const needsAck = notReady.length > 0;
-  const canFreeze = !needsAck || (ack && reason.trim().length > 0);
+  // The acknowledgement is required; the reason is optional.
+  const canFreeze = !needsAck || ack;
+  const reasonText = reason.trim();
   const readyCount = members.length - notReady.filter((id) => members.some((m) => m.id === id)).length;
 
   const doFreeze = async () => {
@@ -110,7 +113,7 @@ export function Review() {
     const body = {
       expectedReviewVersion: review.reviewVersion,
       acknowledgeNotReady: needsAck ? notReady : [],
-      ...(needsAck ? { earlyFreezeReason: reason.trim() } : {}),
+      ...(needsAck && reasonText ? { earlyFreezeReason: reasonText } : {}),
     };
     freezing.current = true;
     try {
@@ -142,7 +145,7 @@ export function Review() {
       </label>
       <div className="field">
         <label htmlFor="freeze-reason" className="field-label">
-          Reason (shown to the group)
+          Reason (optional)
         </label>
         <textarea
           id="freeze-reason"
@@ -150,9 +153,13 @@ export function Review() {
           maxLength={280}
           rows={2}
           value={reason}
+          aria-describedby="freeze-reason-hint"
           onChange={(e) => setReason(e.target.value)}
           placeholder={`For example: ${nameOf(view, notReady[0])} confirmed in chat there's nothing else to add.`}
         />
+        <span id="freeze-reason-hint" className="field-hint">
+          Shown to the whole group if you add one.
+        </span>
       </div>
       <FreezeNotes />
       <FreezeButton disabled={!canFreeze} onClick={() => setConfirming(true)} className="desktop-only-flex" />
@@ -176,6 +183,20 @@ export function Review() {
         {error && (
           <Banner tone="red" icon="error" role="alert">
             {error}
+          </Banner>
+        )}
+        {round.scheduledFreezeDate && (
+          <Banner
+            tone="blue"
+            icon="event"
+            action={
+              <Link to={`${base}/settings#freeze-date-card`} className="btn btn-sm btn-ink">
+                Change
+              </Link>
+            }
+          >
+            Scheduled freeze: {freezeDayLabel(round)}
+            <p>The list freezes automatically at the end of that day{zoneNote(round)} unless you freeze it sooner.</p>
           </Banner>
         )}
 
@@ -247,7 +268,9 @@ export function Review() {
               .sort((a, b) => Number(BigInt(b.net) - BigInt(a.net)))
               .map((b) => (
                 <div key={b.memberId} className="kv">
-                  <span>{nameOf(view, b.memberId, { you: true })}</span>
+                  <span>
+                    <Who view={view} id={b.memberId} you />
+                  </span>
                   <b>
                     <Amount minor={b.net} code={code} exponent={exp} signed tone="auto" />
                   </b>
@@ -262,7 +285,7 @@ export function Review() {
               <h2 id="rv-plan" className="card-title">
                 Who will pay whom<span className="mobile-only-inline"> (preview)</span>
               </h2>
-              <span className="tiny muted meta-item desktop-only-inline">
+              <span className="tiny muted meta-item plan-preview desktop-only-inline">
                 <Icon name="visibility" size={15} />
                 Preview
               </span>
@@ -274,7 +297,7 @@ export function Review() {
                 {review.proposedTransfers.map((t) => (
                   <div key={`${t.fromMemberId}-${t.toMemberId}`} className="plan-row">
                     <span>
-                      {nameOf(view, t.fromMemberId)} → {nameOf(view, t.toMemberId)}
+                      <Who view={view} id={t.fromMemberId} /> → <Who view={view} id={t.toMemberId} />
                     </span>
                     <b className="amount">{fmtMoney(t.amount, code, exp)}</b>
                   </div>
@@ -311,7 +334,14 @@ export function Review() {
           <p>
             Entries and members lock, and {review.proposedTransfers.length ? `${plural(review.proposedTransfers.length, "repayment", "repayments")} become fixed` : "the round settles right away"}. This can't be undone.
           </p>
-          {needsAck && <p>{notReadyNames} will see your reason: “{reason.trim()}”</p>}
+          {needsAck &&
+            (reasonText ? (
+              <p>
+                {notReadyNames} will see your reason: “{reasonText}”
+              </p>
+            ) : (
+              <p>Everyone will see that you froze before {notReadyNames} finished.</p>
+            ))}
         </ConfirmDialog>
       )}
     </>

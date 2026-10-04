@@ -7,6 +7,7 @@ import type {
   AuditEventDTO,
   BalanceDTO,
   CurrencySubtotalDTO,
+  DeletionPreviewDTO,
   EntryDTO,
   InstructionDTO,
   InvitationDTO,
@@ -21,7 +22,18 @@ import type {
   RoundDTO,
   RoundViewDTO,
 } from "@shared/api";
-import { AdjustmentInputSchema, CreateProjectSchema, EntryInputSchema, FreezeSchema, JoinSchema, UpdateSettingsSchema } from "@shared/api";
+import {
+  AdjustmentInputSchema,
+  CreateProjectSchema,
+  DeleteAccountSchema,
+  EntryInputSchema,
+  FreezeScheduleSchema,
+  FreezeSchema,
+  JoinSchema,
+  RenameMemberSchema,
+  UpdateMeSchema,
+  UpdateSettingsSchema,
+} from "@shared/api";
 import { computeBalances, computeEntry, getCurrency, planSettlement, rateFromString, type BalanceEntry, type Shares } from "@shared/money";
 import { createElement, useState, type ComponentType } from "react";
 import { ApiError } from "./errors";
@@ -52,7 +64,7 @@ interface Principal {
   id: string;
   kind: "ACCOUNT" | "GUEST";
   email: string | null;
-  displayName: string;
+  displayName: string | null;
 }
 
 interface State {
@@ -61,10 +73,61 @@ interface State {
   projects: Record<string, MockProject>;
 }
 
-const STORAGE = "splitdummy-mock-v1";
+const STORAGE = "splitdummy-mock-v2";
 const now = () => new Date().toISOString();
 const uid = (p: string) => `${p}${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
 const exp = (code: string) => getCurrency(code)?.exponent ?? 2;
+
+function blankRound(sequence: number, createdAt: string): RoundDTO {
+  return {
+    id: uid("r_"),
+    sequence,
+    status: "COLLECTING",
+    ledgerVersion: 0,
+    reviewVersion: 0,
+    createdAt,
+    frozenAt: null,
+    settledAt: null,
+    earlyFreezeReason: null,
+    frozenByMemberId: null,
+    scheduledFreezeDate: null,
+    scheduledFreezeTimeZone: null,
+    scheduledFreezeAt: null,
+    frozenBySchedule: false,
+  };
+}
+
+/** "YYYY-MM-DD" as the calendar date in `timeZone` right now. */
+function todayIn(timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+function addDays(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + days)).toISOString().slice(0, 10);
+}
+
+/** The instant the day after `ymd` starts in `timeZone` (i.e. the end of `ymd` there). */
+function endOfDayIn(ymd: string, timeZone: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const guess = Date.UTC(y!, m! - 1, d! + 1);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" })
+      .formatToParts(new Date(guess))
+      .map((x) => [x.type, Number(x.value)]),
+  );
+  const asUtc = Date.UTC(parts.year!, parts.month! - 1, parts.day!, parts.hour!, parts.minute!, parts.second!);
+  return new Date(guess - (asUtc - guess)).toISOString();
+}
+
+function validTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function fail(status: number, code: ApiError["code"], message: string, field?: string, details?: Record<string, unknown>): never {
   throw new ApiError(status, code, message, field, details);
@@ -231,7 +294,7 @@ function clearReady(r: MockRound, ids: string[] | "all") {
   for (const [m, st] of Object.entries(r.readiness)) if (ids === "all" || ids.includes(m)) r.readiness[m] = { ...st, ready: false };
 }
 
-function freezeRound(p: MockProject, r: MockRound, actor: string, reason: string | null, at = now()) {
+function freezeRound(p: MockProject, r: MockRound, actor: string | null, reason: string | null, at = now()) {
   const view = roundView(p, r);
   const nets: Record<string, bigint> = {};
   for (const b of view.balances) if (BigInt(b.net) !== 0n) nets[b.memberId] = BigInt(b.net);
@@ -258,9 +321,35 @@ function freezeRound(p: MockProject, r: MockRound, actor: string, reason: string
   if (!plan.length) r.round.settledAt = at;
 }
 
+/** The DO's alarm: freeze the collecting round once its scheduled instant has passed. */
+function runSchedule(p: MockProject): boolean {
+  const r = p.rounds[p.rounds.length - 1];
+  if (!r || r.round.status !== "COLLECTING" || !r.round.scheduledFreezeAt) return false;
+  const at = r.round.scheduledFreezeAt;
+  if (new Date(at).getTime() > Date.now()) return false;
+  const active = p.members.filter((m) => m.status === "ACTIVE");
+  const notReady = active.filter((m) => !r.readiness[m.id]?.ready);
+  freezeRound(p, r, null, notReady.length ? "Scheduled freeze date reached" : null, at);
+  r.round.frozenBySchedule = true;
+  p.project.version++;
+  p.events.push({
+    id: uid("ev_"),
+    at,
+    actorMemberId: null,
+    action: "ROUND_FROZEN",
+    roundId: r.round.id,
+    entityId: null,
+    summary: `Round ${r.round.sequence} froze automatically on the scheduled date${notReady.length ? ` before ${notReady.map((m) => m.displayName).join(", ")} finished` : ""}`,
+    details: { scheduled: true, notReady: notReady.map((m) => m.id) },
+  });
+  if (r.instructions.length === 0)
+    p.events.push({ id: uid("ev_"), at, actorMemberId: null, action: "ROUND_SETTLED", roundId: r.round.id, entityId: null, summary: `Round ${r.round.sequence} settled: no repayments needed`, details: null });
+  return true;
+}
+
 // ---------- seed ----------
 
-type Seed = "collecting" | "settling" | "settled";
+type Seed = "collecting" | "settling" | "settled" | "autofrozen";
 
 function seed(kind: Seed = "collecting"): State {
   const principals: Record<string, Principal> = {
@@ -279,13 +368,14 @@ function seed(kind: Seed = "collecting"): State {
   const mkProject = (id: string, name: string, baseCurrency: string, multi: boolean, people: [string, string, string?][], created: string): MockProject => {
     const members: MemberDTO[] = people.map(([mid, pid, joined], i) => ({
       id: mid,
-      displayName: principals[pid]!.displayName,
+      displayName: principals[pid]!.displayName!,
       isOwner: i === 0,
       isGuest: principals[pid]!.kind === "GUEST",
       hasRecoverableAccount: principals[pid]!.kind === "ACCOUNT" || !!principals[pid]!.email,
       joinedAt: joined ?? new Date(new Date(created).getTime() + i * 3600_000).toISOString(),
       status: "ACTIVE",
       referenced: false,
+      accountDeleted: false,
     }));
     const p: MockProject = {
       project: {
@@ -313,7 +403,7 @@ function seed(kind: Seed = "collecting"): State {
   };
   const newRound = (p: MockProject, seq: number, created: string): MockRound => {
     const r: MockRound = {
-      round: { id: uid("r_"), sequence: seq, status: "COLLECTING", ledgerVersion: 0, reviewVersion: 0, createdAt: created, frozenAt: null, settledAt: null, earlyFreezeReason: null, frozenByMemberId: null },
+      round: blankRound(seq, created),
       entries: [],
       deleted: [],
       readiness: Object.fromEntries(p.members.map((m) => [m.id, { ready: false, markedAt: null }])),
@@ -338,7 +428,7 @@ function seed(kind: Seed = "collecting"): State {
     r.round.reviewVersion++;
     p.events.push({ id: uid("ev_"), at, actorMemberId: mid, action: "READY_SET", roundId: r.round.id, entityId: null, summary: `${p.members.find((m) => m.id === mid)?.displayName} finished adding`, details: null });
   };
-  const all = (p: MockProject) => p.members.map((m) => ({ memberId: m.id }));
+  const all = (p: MockProject) => p.members.filter((m) => m.status === "ACTIVE").map((m) => ({ memberId: m.id }));
 
   // Lisbon trip — the design's demo.
   const lis = mkProject(
@@ -353,10 +443,26 @@ function seed(kind: Seed = "collecting"): State {
       ["m_kai", "pr_kai"],
       ["m_ana", "pr_ana"],
     ],
-    "2026-09-02T09:00:00.000Z",
+    "2026-08-01T09:00:00.000Z",
   );
   lis.rates.push({ currency: "GBP", rate: "1.17", setByMemberId: "m_maya", setAt: "2026-09-03T10:12:00.000Z", revision: 1 });
-  const lr = newRound(lis, 1, "2026-09-02T09:00:00.000Z");
+  // Round 1 (flights and deposit) was settled in August; Sam took part and later deleted their account.
+  lis.members.push({ id: "m_sam", displayName: "Deleted account", isOwner: false, isGuest: false, hasRecoverableAccount: false, joinedAt: "2026-08-01T15:00:00.000Z", status: "LEFT", referenced: true, accountDeleted: true });
+  lis.principals.m_sam = "pr_sam_deleted";
+  const l1 = newRound(lis, 1, "2026-08-01T09:00:00.000Z");
+  const withSam = [...all(lis), { memberId: "m_sam" }];
+  add(lis, l1, "m_maya", { type: "EXPENSE", description: "Flights to Lisbon", occurredAt: "2026-08-03", originalAmount: "102000", originalCurrency: "EUR", payerMemberId: "m_maya", splitMode: "EQUAL", participants: withSam }, "2026-08-03T18:00:00.000Z");
+  add(lis, l1, "m_tom", { type: "EXPENSE", description: "Apartment deposit", occurredAt: "2026-08-05", originalAmount: "30000", originalCurrency: "EUR", payerMemberId: "m_tom", splitMode: "EQUAL", participants: withSam }, "2026-08-05T10:00:00.000Z");
+  for (const m of lis.members) l1.readiness[m.id] = { ready: true, markedAt: "2026-08-10T10:00:00.000Z" };
+  freezeRound(lis, l1, "m_maya", null, "2026-08-11T09:00:00.000Z");
+  lis.events.push({ id: uid("ev_"), at: "2026-08-11T09:00:00.000Z", actorMemberId: "m_maya", action: "ROUND_FROZEN", roundId: l1.round.id, entityId: null, summary: "Maya froze round 1", details: null });
+  for (const i of l1.instructions) Object.assign(i, { state: "CONFIRMED", sentAt: "2026-08-12T09:00:00.000Z", confirmedAt: "2026-08-14T09:00:00.000Z", revision: 3 });
+  l1.round.status = "SETTLED";
+  l1.round.settledAt = "2026-08-14T09:00:00.000Z";
+  lis.events.push({ id: uid("ev_"), at: "2026-08-14T09:00:00.000Z", actorMemberId: null, action: "ROUND_SETTLED", roundId: l1.round.id, entityId: null, summary: "Round 1 is all settled", details: null });
+  lis.events.push({ id: uid("ev_"), at: "2026-08-20T09:00:00.000Z", actorMemberId: "m_sam", action: "MEMBER_ACCOUNT_DELETED", roundId: null, entityId: "m_sam", summary: "A member deleted their account; they now show as “Deleted account”", details: null });
+  const lr = newRound(lis, 2, "2026-09-02T09:00:00.000Z");
+  lis.events.push({ id: uid("ev_"), at: "2026-09-02T09:00:00.000Z", actorMemberId: "m_maya", action: "ROUND_STARTED", roundId: lr.round.id, entityId: null, summary: "Maya started round 2", details: null });
   add(lis, lr, "m_maya", { type: "EXPENSE", description: "Apartment, 4 nights", occurredAt: "2026-09-12", originalAmount: "64000", originalCurrency: "EUR", payerMemberId: "m_maya", splitMode: "EQUAL", participants: all(lis) }, "2026-09-12T18:20:00.000Z");
   add(
     lis,
@@ -388,9 +494,19 @@ function seed(kind: Seed = "collecting"): State {
   ready(lis, lr, "m_maya", "2026-09-16T08:00:00.000Z");
   ready(lis, lr, "m_tom", "2026-09-16T09:30:00.000Z");
   ready(lis, lr, "m_ines", "2026-09-16T11:00:00.000Z");
-  if (kind !== "collecting") {
+  if (kind === "collecting") {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const date = addDays(todayIn(tz), 5);
+    Object.assign(lr.round, { scheduledFreezeDate: date, scheduledFreezeTimeZone: tz, scheduledFreezeAt: endOfDayIn(date, tz) });
+    lis.events.push({ id: uid("ev_"), at: "2026-09-16T12:00:00.000Z", actorMemberId: "m_maya", action: "FREEZE_SCHEDULED", roundId: lr.round.id, entityId: null, summary: `Maya set the freeze date to ${date}`, details: { date, timeZone: tz } });
+  } else if (kind === "autofrozen") {
+    Object.assign(lr.round, { scheduledFreezeDate: "2026-09-27", scheduledFreezeTimeZone: "Europe/Lisbon", scheduledFreezeAt: endOfDayIn("2026-09-27", "Europe/Lisbon") });
+  }
+  if (kind === "autofrozen") {
+    runSchedule(lis);
+  } else if (kind !== "collecting") {
     freezeRound(lis, lr, "m_maya", "Kai and Ana confirmed in chat that they have nothing else to add.", "2026-09-28T16:40:00.000Z");
-    lis.events.push({ id: uid("ev_"), at: "2026-09-28T16:40:00.000Z", actorMemberId: "m_maya", action: "ROUND_FROZEN", roundId: lr.round.id, entityId: null, summary: "Maya froze round 1 before Kai and Ana finished", details: null });
+    lis.events.push({ id: uid("ev_"), at: "2026-09-28T16:40:00.000Z", actorMemberId: "m_maya", action: "ROUND_FROZEN", roundId: lr.round.id, entityId: null, summary: "Maya froze round 2 before Kai and Ana finished", details: null });
     const [a, b, c, d] = lr.instructions;
     const conf = (i: InstructionDTO | undefined, sent: string, confd: string) => i && Object.assign(i, { state: "CONFIRMED", sentAt: sent, confirmedAt: confd, revision: 3 });
     if (kind === "settling") {
@@ -506,7 +622,7 @@ function refreshReferenced(p: MockProject) {
 function load(): State {
   const params = new URLSearchParams(location.search);
   const want = params.get("mock");
-  if (want === "reset" || want === "collecting" || want === "settling" || want === "settled") {
+  if (want === "reset" || want === "collecting" || want === "settling" || want === "settled" || want === "autofrozen") {
     const s = seed(want === "reset" ? "collecting" : want);
     save(s);
     params.delete("mock");
@@ -569,6 +685,7 @@ export function createMockApi(): MockApi {
   const proj = (id: string): MockProject => {
     const p = state.projects[id];
     if (!p) fail(404, "NOT_FOUND", "This group isn't available.");
+    if (runSchedule(p)) save(state);
     return p;
   };
   const memberOf = (p: MockProject): MemberDTO => {
@@ -593,8 +710,8 @@ export function createMockApi(): MockApi {
     if (r.round.status !== "COLLECTING") fail(409, "ROUND_NOT_COLLECTING", "Expenses are frozen for this round. Add it to the next round instead.");
     return r;
   };
-  const log = (p: MockProject, actor: string | null, action: string, roundId: string | null, entityId: string | null, summary: string) =>
-    p.events.push({ id: uid("ev_"), at: now(), actorMemberId: actor, action, roundId, entityId, summary, details: null });
+  const log = (p: MockProject, actor: string | null, action: string, roundId: string | null, entityId: string | null, summary: string, details: Record<string, unknown> | null = null) =>
+    p.events.push({ id: uid("ev_"), at: now(), actorMemberId: actor, action, roundId, entityId, summary, details });
   const nameOf = (p: MockProject, id: string) => p.members.find((m) => m.id === id)?.displayName ?? "Someone";
 
   const view = (p: MockProject): ProjectViewDTO => {
@@ -636,6 +753,7 @@ export function createMockApi(): MockApi {
     fail(422, "VALIDATION", issues[0]?.message ?? "Invalid input", issues[0]?.path.map(String).join("."));
 
   const summary = (p: MockProject): ProjectSummaryDTO => {
+    if (runSchedule(p)) save(state);
     const m = memberOf(p);
     const r = active(p);
     const rv = roundView(p, r);
@@ -659,19 +777,36 @@ export function createMockApi(): MockApi {
     };
   };
 
+  const meDto = (p: Principal): MeDTO => ({ principalId: p.id, kind: p.kind, email: p.email, displayName: p.displayName });
+  const myProjects = (pid: string) => Object.values(state.projects).filter((p) => p.members.some((m) => p.principals[m.id] === pid && m.status === "ACTIVE"));
+  const deletionPreview = (pid: string): DeletionPreviewDTO => {
+    const out: DeletionPreviewDTO = { ownedProjects: [], memberProjects: [], blockingProjects: [] };
+    for (const p of myProjects(pid)) {
+      const m = p.members.find((x) => p.principals[x.id] === pid && x.status === "ACTIVE")!;
+      if (m.isOwner) {
+        out.ownedProjects.push({ id: p.project.id, name: p.project.name, memberCount: p.members.filter((x) => x.status === "ACTIVE").length });
+        continue;
+      }
+      out.memberProjects.push({ id: p.project.id, name: p.project.name });
+      const open = p.rounds.some((r) => r.round.status === "SETTLING" && r.instructions.some((i) => i.state !== "CONFIRMED" && (i.fromMemberId === m.id || i.toMemberId === m.id)));
+      if (open) out.blockingProjects.push({ id: p.project.id, name: p.project.name });
+    }
+    return out;
+  };
+
   const api: MockApi = {
     getConfig: () => delay(() => ({ turnstileSiteKey: null, environment: "development" as const })),
     getMe: () =>
       delay((): MeDTO | null => {
         const p = state.me ? state.principals[state.me] : null;
-        return p ? { principalId: p.id, kind: p.kind, email: p.email, displayName: p.displayName } : null;
+        return p ? meDto(p) : null;
       }),
     requestSignIn: (body, o) =>
       mutate(o, null, "", () => {
         const email = body.email.trim().toLowerCase();
         let p = Object.values(state.principals).find((x) => x.email === email);
         if (!p) {
-          p = { id: uid("pr_"), kind: "ACCOUNT", email, displayName: email.split("@")[0]! };
+          p = { id: uid("pr_"), kind: "ACCOUNT", email, displayName: null };
           state.principals[p.id] = p;
         }
         const target = p.id;
@@ -700,14 +835,41 @@ export function createMockApi(): MockApi {
           for (const m of pr.members) if (pr.principals[m.id] === p.id) m.hasRecoverableAccount = true;
         return { sent: true as const };
       }),
-
-    listProjects: () =>
-      delay(() => {
-        const pid = me().id;
-        return Object.values(state.projects)
-          .filter((p) => p.members.some((m) => p.principals[m.id] === pid && m.status === "ACTIVE"))
-          .map(summary);
+    updateMe: (body, o) =>
+      mutate(o, null, "", () => {
+        const d = UpdateMeSchema.safeParse(body);
+        if (!d.success) zodFail(d.error.issues);
+        const p = me();
+        p.displayName = d.data!.displayName;
+        return meDto(p);
       }),
+    getDeletionPreview: () => delay(() => deletionPreview(me().id)),
+    deleteAccount: (body, o) =>
+      mutate(o, null, "", () => {
+        if (!DeleteAccountSchema.safeParse(body).success) fail(422, "VALIDATION", "Type DELETE to confirm.", "confirm");
+        const pid = me().id;
+        const preview = deletionPreview(pid);
+        if (preview.blockingProjects.length)
+          fail(409, "ACCOUNT_HAS_OPEN_TRANSFERS", "Some of your transfers aren't confirmed yet. Finish them before deleting your account.", undefined, { projects: preview.blockingProjects.map((x) => x.id) });
+        for (const x of preview.ownedProjects) delete state.projects[x.id];
+        for (const x of preview.memberProjects) {
+          const p = state.projects[x.id]!;
+          const m = p.members.find((y) => p.principals[y.id] === pid && y.status === "ACTIVE")!;
+          Object.assign(m, { displayName: "Deleted account", accountDeleted: true, hasRecoverableAccount: false, status: "LEFT" });
+          const r = active(p);
+          if (r.round.status === "COLLECTING") {
+            delete r.readiness[m.id];
+            r.round.reviewVersion++;
+          }
+          log(p, m.id, "MEMBER_ACCOUNT_DELETED", null, m.id, "A member deleted their account; they now show as “Deleted account”");
+          p.project.version++;
+          emit(p.project.id, "MEMBER_ACCOUNT_DELETED");
+        }
+        delete state.principals[pid];
+        state.me = null;
+      }),
+
+    listProjects: () => delay(() => myProjects(me().id).map(summary)),
     createProject: (body, o) =>
       mutate(o, null, "", () => {
         const parsed = CreateProjectSchema.safeParse(body);
@@ -720,7 +882,7 @@ export function createMockApi(): MockApi {
         const t = now();
         const p: MockProject = {
           project: { id, name: d.name, ownerMemberId: mid, baseCurrency: d.baseCurrency, baseExponent: exp(d.baseCurrency), multiCurrencyEnabled: d.multiCurrencyEnabled, baseCurrencyLocked: false, activeRoundId: null, version: 1, createdAt: t },
-          members: [{ id: mid, displayName: d.ownerDisplayName, isOwner: true, isGuest: false, hasRecoverableAccount: true, joinedAt: t, status: "ACTIVE", referenced: false }],
+          members: [{ id: mid, displayName: d.ownerDisplayName, isOwner: true, isGuest: false, hasRecoverableAccount: true, joinedAt: t, status: "ACTIVE", referenced: false, accountDeleted: false }],
           principals: { [mid]: pr.id },
           rates: [],
           rounds: [],
@@ -729,7 +891,7 @@ export function createMockApi(): MockApi {
           pendingOwnership: null,
         };
         const r: MockRound = {
-          round: { id: uid("r_"), sequence: 1, status: "COLLECTING", ledgerVersion: 0, reviewVersion: 0, createdAt: t, frozenAt: null, settledAt: null, earlyFreezeReason: null, frozenByMemberId: null },
+          round: blankRound(1, t),
           entries: [],
           deleted: [],
           readiness: { [mid]: { ready: false, markedAt: null } },
@@ -835,7 +997,7 @@ export function createMockApi(): MockApi {
         const existing = p.members.find((m) => p.principals[m.id] === pr.id && m.status === "ACTIVE");
         if (existing) return { projectId };
         const mid = uid("m_");
-        p.members.push({ id: mid, displayName: d.data!.displayName, isOwner: false, isGuest: pr.kind === "GUEST", hasRecoverableAccount: pr.kind === "ACCOUNT" || !!pr.email, joinedAt: now(), status: "ACTIVE", referenced: false });
+        p.members.push({ id: mid, displayName: d.data!.displayName, isOwner: false, isGuest: pr.kind === "GUEST", hasRecoverableAccount: pr.kind === "ACCOUNT" || !!pr.email, joinedAt: now(), status: "ACTIVE", referenced: false, accountDeleted: false });
         p.principals[mid] = pr.id;
         if (r.round.status === "COLLECTING") {
           clearReady(r, "all");
@@ -890,6 +1052,20 @@ export function createMockApi(): MockApi {
         const r = active(p);
         if (r.round.status === "COLLECTING") clearReady(r, "all");
         log(p, m.id, "OWNERSHIP_TRANSFERRED", null, m.id, `${m.displayName} is now the owner`);
+      }),
+    renameMe: (id, body, o) =>
+      mutate(o, id, "MEMBER_RENAMED", () => {
+        const p = proj(id);
+        const m = memberOf(p);
+        const d = RenameMemberSchema.safeParse(body);
+        if (!d.success) zodFail(d.error.issues);
+        const next = d.data!.displayName;
+        if (next !== m.displayName) {
+          const prev = m.displayName;
+          m.displayName = next;
+          log(p, m.id, "MEMBER_RENAMED", null, m.id, `${prev} is now called ${next}`, { from: prev, to: next });
+        }
+        return { ...m };
       }),
 
     createEntry: (id, roundId, body, o) =>
@@ -1023,11 +1199,30 @@ export function createMockApi(): MockApi {
         if (d.expectedReviewVersion !== r.round.reviewVersion) fail(409, "REVIEW_STALE", "Something changed during review.", undefined, { currentReviewVersion: r.round.reviewVersion });
         const notReady = roundView(p, r).readiness.filter((x) => !x.ready).map((x) => x.memberId).sort();
         if (notReady.join() !== [...d.acknowledgeNotReady].sort().join()) fail(409, "NOT_READY_UNACKNOWLEDGED", "Confirm who isn't finished.", undefined, { notReady });
-        if (notReady.length && !d.earlyFreezeReason) fail(422, "VALIDATION", "Give a reason", "earlyFreezeReason");
-        freezeRound(p, r, m.id, notReady.length ? (d.earlyFreezeReason ?? null) : null);
+        freezeRound(p, r, m.id, notReady.length ? d.earlyFreezeReason || null : null);
+        Object.assign(r.round, { scheduledFreezeDate: null, scheduledFreezeTimeZone: null, scheduledFreezeAt: null });
         refreshReferenced(p);
         log(p, m.id, "ROUND_FROZEN", r.round.id, null, `${m.displayName} froze round ${r.round.sequence}${notReady.length ? ` before ${notReady.map((x) => nameOf(p, x)).join(", ")} finished` : ""}`);
         if (r.round.status === "SETTLED") log(p, null, "ROUND_SETTLED", r.round.id, null, `Round ${r.round.sequence} settled: no repayments needed`);
+      }),
+    setFreezeSchedule: (id, roundId, body, o) =>
+      mutate(o, id, "FREEZE_SCHEDULE_CHANGED", () => {
+        const p = proj(id);
+        const m = ownerOnly(p);
+        const r = collecting(p, roundId);
+        const d = FreezeScheduleSchema.safeParse(body);
+        if (!d.success) zodFail(d.error.issues);
+        const { date, timeZone } = d.data!;
+        if (!validTimeZone(timeZone)) fail(422, "VALIDATION", "Unknown time zone", "timeZone");
+        if (date === null) {
+          if (r.round.scheduledFreezeDate) log(p, m.id, "FREEZE_SCHEDULE_CLEARED", r.round.id, null, `${m.displayName} removed the freeze date`);
+          Object.assign(r.round, { scheduledFreezeDate: null, scheduledFreezeTimeZone: null, scheduledFreezeAt: null });
+        } else {
+          if (date < todayIn(timeZone)) fail(422, "VALIDATION", "Pick today or a later date.", "date");
+          Object.assign(r.round, { scheduledFreezeDate: date, scheduledFreezeTimeZone: timeZone, scheduledFreezeAt: endOfDayIn(date, timeZone) });
+          log(p, m.id, "FREEZE_SCHEDULED", r.round.id, null, `${m.displayName} set the freeze date to ${date}`, { date, timeZone });
+        }
+        return { ...r.round };
       }),
     getRound: (id, roundId) =>
       delay(() => {
@@ -1090,7 +1285,7 @@ export function createMockApi(): MockApi {
         if (last.round.status !== "SETTLED") fail(409, "INVALID_TRANSITION", "Finish the current round first.");
         const t = now();
         const r: MockRound = {
-          round: { id: uid("r_"), sequence: last.round.sequence + 1, status: "COLLECTING", ledgerVersion: 0, reviewVersion: 0, createdAt: t, frozenAt: null, settledAt: null, earlyFreezeReason: null, frozenByMemberId: null },
+          round: blankRound(last.round.sequence + 1, t),
           entries: [],
           deleted: [],
           readiness: Object.fromEntries(p.members.filter((x) => x.status === "ACTIVE").map((x) => [x.id, { ready: false, markedAt: null }])),
@@ -1158,7 +1353,7 @@ export function createMockApi(): MockApi {
     const h = createElement;
     const pill = { position: "fixed", top: 8, left: 8, zIndex: 100, font: "600 11px system-ui", background: "#1a1a1a", color: "#fff", borderRadius: 6, padding: "4px 8px", border: 0, opacity: 0.8 } as const;
     if (!open) return h("button", { style: pill, onClick: () => setOpen(true), "aria-label": "Mock tools" }, "MOCK");
-    const who = state.me ? state.principals[state.me]?.displayName : "signed out";
+    const who = state.me ? (state.principals[state.me]?.displayName ?? state.principals[state.me]?.email) : "signed out";
     const panel = { ...pill, opacity: 1, padding: 12, display: "flex", flexDirection: "column", gap: 8, width: 230 } as const;
     const btn = { font: "500 12px system-ui", padding: "5px 8px", borderRadius: 4, border: "1px solid #555", background: "#2a2a2a", color: "#fff", textAlign: "left" } as const;
     return h(
@@ -1169,9 +1364,9 @@ export function createMockApi(): MockApi {
         "select",
         { style: btn, value: state.me ?? "", onChange: (e: { target: { value: string } }) => switchTo(e.target.value || null) },
         h("option", { value: "" }, "Signed out"),
-        ...Object.values(state.principals).map((p) => h("option", { key: p.id, value: p.id }, `${p.displayName}${p.email ? "" : " (guest)"}`)),
+        ...Object.values(state.principals).map((p) => h("option", { key: p.id, value: p.id }, `${p.displayName ?? p.email}${p.email ? "" : " (guest)"}`)),
       ),
-      ...(["collecting", "settling", "settled"] as const).map((k) =>
+      ...(["collecting", "settling", "settled", "autofrozen"] as const).map((k) =>
         h("button", { key: k, style: btn, onClick: () => ((state = seed(k)), save(state), location.reload()) }, `Reset: Lisbon ${k}`),
       ),
       h("button", { style: btn, onClick: simulateDisconnect }, "Simulate disconnect (4s)"),

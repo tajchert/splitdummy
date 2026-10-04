@@ -1,10 +1,12 @@
 import type { EntryDTO, InstructionDTO, MemberDTO, ProjectViewDTO, RoundViewDTO } from "@shared/api";
 
-export type Tone = "accent" | "blue" | "green" | "amber" | "red";
+export type Tone = "accent" | "blue" | "green" | "amber" | "red" | "deleted";
 const TONES: Tone[] = ["accent", "blue", "green", "amber", "red"];
 
 /** Stable avatar colour by join order, so the owner (first) gets the accent like in the design. */
 export function toneFor(view: Pick<ProjectViewDTO, "members">, memberId: string): Tone {
+  // Deleted accounts get a neutral placeholder instead of a colour.
+  if (view.members.find((m) => m.id === memberId)?.accountDeleted) return "deleted";
   const sorted = [...view.members].sort((a, b) => a.joinedAt.localeCompare(b.joinedAt) || a.id.localeCompare(b.id));
   const i = sorted.findIndex((m) => m.id === memberId);
   return TONES[(i < 0 ? 0 : i) % TONES.length]!;
@@ -26,6 +28,10 @@ export function nameOf(view: Pick<ProjectViewDTO, "members" | "me">, id: string 
   return n;
 }
 
+export function isDeleted(view: Pick<ProjectViewDTO, "members">, id: string | null | undefined): boolean {
+  return !!member(view, id)?.accountDeleted;
+}
+
 export function initial(name: string): string {
   return (Array.from(name.trim())[0] ?? "?").toLocaleUpperCase();
 }
@@ -39,6 +45,19 @@ export function activeMembers(view: ProjectViewDTO): MemberDTO[] {
 
 export function readinessOf(round: RoundViewDTO, memberId: string): boolean {
   return round.readiness.find((r) => r.memberId === memberId)?.ready ?? false;
+}
+
+/**
+ * Members who hadn't marked "done adding" when the round froze. Readiness rows of a frozen
+ * round are the ones recorded at freeze; people who joined later never count.
+ */
+export function notReadyAtFreeze(view: Pick<ProjectViewDTO, "members">, round: RoundViewDTO): MemberDTO[] {
+  const frozenAt = round.round.frozenAt;
+  if (round.round.status === "COLLECTING" || !frozenAt) return [];
+  return round.readiness
+    .filter((r) => !r.ready)
+    .map((r) => member(view, r.memberId))
+    .filter((m): m is MemberDTO => !!m && m.joinedAt <= frozenAt);
 }
 
 export function balanceOf(round: RoundViewDTO, memberId: string) {

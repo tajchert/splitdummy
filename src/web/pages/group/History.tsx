@@ -42,7 +42,18 @@ const ACTION_ICON: Record<string, string> = {
   RATE_DEFAULT_SET: "currency_exchange",
   RATE_DEFAULT_DELETED: "currency_exchange",
   SETTINGS_UPDATED: "settings",
+  MEMBER_RENAMED: "badge",
+  MEMBER_ACCOUNT_DELETED: "person_off",
+  FREEZE_SCHEDULED: "event",
+  FREEZE_SCHEDULE_CLEARED: "event_busy",
 };
+
+const iconScheduledFreeze = "lock_clock";
+
+function iconFor(e: AuditEventDTO): string {
+  if (e.action === "ROUND_FROZEN" && e.details?.scheduled) return iconScheduledFreeze;
+  return ACTION_ICON[e.action] ?? "radio_button_unchecked";
+}
 
 function RoundLine({ r, base, current }: { r: RoundDTO; base: string; current: boolean }) {
   return (
@@ -147,7 +158,7 @@ export function History() {
             {events.map((e) => (
               <li key={e.id} className="activity-item">
                 <span className="activity-icon">
-                  <Icon name={ACTION_ICON[e.action] ?? "radio_button_unchecked"} size={16} />
+                  <Icon name={iconFor(e)} size={16} />
                 </span>
                 <div className="grow">
                   <p className="small">{e.summary}</p>

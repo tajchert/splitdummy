@@ -7,13 +7,14 @@ import { useSubmit } from "../../api/idempotency";
 import { BottomBar } from "../../components/Shell";
 import { useToast } from "../../components/Toast";
 import { Amount, Banner, EmptyState, Icon } from "../../components/ui";
-import { fmtDate, fmtDateTime, fmtMoney, plural } from "../../lib/format";
+import { fmtDate, fmtDateTime, fmtMoney, fmtWeekday, plural } from "../../lib/format";
 import { activeMembers, balanceOf, confirmedCount, nameOf, readinessOf, roundLabel } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
 import {
   BalanceCard,
   CurrencySubtotals,
   EntryRow,
+  FreezeNote,
   GroupHeader,
   groupBase,
   ReadinessCard,
@@ -21,7 +22,10 @@ import {
   sortEntries,
   TaskCards,
   TransferCard,
+  Who,
 } from "./parts";
+import { FreezeDateNotice } from "./FreezeDate";
+import { RoundsSwitcher } from "./RoundsSwitcher";
 import { readyChangedBySelfRecently } from "./selfChange";
 
 export function GroupHome() {
@@ -106,11 +110,13 @@ function Collecting({ view }: { view: ProjectViewDTO }) {
             <p>Create an invitation link and send it to everyone who shares the costs.</p>
           </Banner>
         )}
+        <FreezeDateNotice view={view} />
 
         <div className="group-cols">
           <aside className="group-side">
             <BalanceCard view={view} />
             <ReadinessCard view={view} />
+            <RoundsSwitcher view={view} />
           </aside>
 
           <section className="group-list" aria-labelledby="entries-h">
@@ -217,14 +223,7 @@ function Settling({ view }: { view: ProjectViewDTO }) {
           </div>
         }
       />
-      {round.round.earlyFreezeReason && (
-        <Banner tone="neutral" icon="info">
-          Frozen before everyone finished
-          <p>
-            {nameOf(view, round.round.frozenByMemberId)}: “{round.round.earlyFreezeReason}”
-          </p>
-        </Banner>
-      )}
+      <FreezeNote view={view} round={round} />
       {disputes > 0 && (
         <Banner tone="red" icon="report" role="status">
           {plural(disputes, "transfer is", "transfers are")} disputed
@@ -247,6 +246,7 @@ function Settling({ view }: { view: ProjectViewDTO }) {
               <Icon name="chevron_right" size={18} />
             </span>
           </Link>
+          <RoundsSwitcher view={view} />
         </aside>
         <section className="group-list" aria-labelledby="transfers-h">
           <div className="section-head mobile-only-flex">
@@ -359,6 +359,12 @@ function Settled({ view }: { view: ProjectViewDTO }) {
               {view.project.name} · {roundLabel(r.sequence)}
               {r.settledAt ? ` · Completed ${fmtDate(r.settledAt)}` : ""}
             </p>
+            {r.frozenBySchedule && (
+              <p className="small muted meta-item">
+                <Icon name="event_available" size={16} />
+                Frozen automatically on the scheduled date{r.scheduledFreezeDate ? ` (${fmtWeekday(r.scheduledFreezeDate)})` : ""}
+              </p>
+            )}
             <div className="settled-stats">
               <div className="stat">
                 <span className="tiny muted">Spent together</span>
@@ -402,7 +408,7 @@ function Settled({ view }: { view: ProjectViewDTO }) {
                   <div key={i.id} className="row done-row">
                     <Icon name="check_circle" size={18} className="green" />
                     <span className="grow">
-                      {nameOf(view, i.fromMemberId, { you: true })} → {nameOf(view, i.toMemberId, { you: true })}
+                      <Who view={view} id={i.fromMemberId} you /> → <Who view={view} id={i.toMemberId} you />
                     </span>
                     <b>
                       <Amount minor={i.amount} code={i.currency} exponent={i.exponent} />
@@ -439,6 +445,7 @@ function Settled({ view }: { view: ProjectViewDTO }) {
                 <p className="small muted">Ask {nameOf(view, view.project.ownerMemberId)} (the owner) to start the next round, then add it there.</p>
               )}
             </div>
+            <RoundsSwitcher view={view} />
           </div>
         </div>
       </main>

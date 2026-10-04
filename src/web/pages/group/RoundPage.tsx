@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Outlet, useParams } from "react-router";
+import { Link, Outlet, useParams } from "react-router";
 import type { RoundViewDTO } from "@shared/api";
 import { useApi } from "../../api/context";
 import { errorMessage } from "../../api/errors";
@@ -10,7 +10,8 @@ import { nameOf, roundLabel } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
 import type { RoundOutletContext } from "./EntryDetail";
 import { RoundEntries } from "./EntriesPage";
-import { groupBase, TransferCard } from "./parts";
+import { FreezeNote, groupBase, TransferCard, Who } from "./parts";
+import { RoundsSwitcher } from "./RoundsSwitcher";
 
 export function RoundPage() {
   const view = useView();
@@ -55,7 +56,7 @@ export function RoundPage() {
   return (
     <main id="main" className="page page-mid">
       <div className="page-top">
-        <BackButton to={`${base}/history`} label="Back to history" />
+        <BackButton to={base} label="Back to the current round" />
       </div>
       <div className="ghead-title-row">
         <h1 className="page-h1">{roundLabel(r.sequence)}</h1>
@@ -63,21 +64,30 @@ export function RoundPage() {
       </div>
       <div className="meta">
         <Meta icon="calendar_today">Started {fmtDate(r.createdAt)}</Meta>
-        {r.frozenAt && <Meta icon="lock">Frozen {fmtDateTime(r.frozenAt)}{r.frozenByMemberId ? ` by ${nameOf(view, r.frozenByMemberId)}` : ""}</Meta>}
+        {r.frozenAt && (
+          <Meta icon="lock">
+            Frozen {fmtDateTime(r.frozenAt)}
+            {r.frozenBySchedule ? " automatically" : r.frozenByMemberId ? ` by ${nameOf(view, r.frozenByMemberId)}` : ""}
+          </Meta>
+        )}
         {r.settledAt && <Meta icon="sports_score">Settled {fmtDate(r.settledAt)}</Meta>}
       </div>
       {r.id !== view.current.round.id && (
-        <Banner tone="neutral" icon="history">
+        <Banner
+          tone="neutral"
+          icon="history"
+          action={
+            <Link to={base} className="btn btn-sm btn-ink">
+              Current round
+            </Link>
+          }
+        >
           A previous round, shown read-only
           <p>Nothing here changes. Corrections go into the current round as adjustments.</p>
         </Banner>
       )}
-      {r.earlyFreezeReason && (
-        <Banner tone="neutral" icon="info">
-          Frozen before everyone finished
-          <p>“{r.earlyFreezeReason}”</p>
-        </Banner>
-      )}
+      <RoundsSwitcher view={view} viewingId={r.id} chipsOnly />
+      <FreezeNote view={view} round={round} />
 
       <section className="stack-12" aria-labelledby="r-entries">
         <h2 id="r-entries" className="section-title">
@@ -106,7 +116,9 @@ export function RoundPage() {
         <div className="card card-flush">
           {round.balances.map((b) => (
             <div key={b.memberId} className="row">
-              <span className="grow">{nameOf(view, b.memberId, { you: true })}</span>
+              <span className="grow">
+                <Who view={view} id={b.memberId} you />
+              </span>
               <Amount minor={b.net} code={code} exponent={exp} signed tone="auto" />
             </div>
           ))}

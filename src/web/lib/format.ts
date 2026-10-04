@@ -55,6 +55,16 @@ export function fmtDay(ymd: string, short = false): string {
   return (short ? shortDateFmt : dateFmt).format(dt);
 }
 
+const weekdayFmt = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short" });
+const weekdayYearFmt = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
+/** "YYYY-MM-DD" → "Mon 20 Oct" (with the year when it isn't this year). Calendar date, no timezone shift. */
+export function fmtWeekday(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1, 12));
+  return (y === new Date().getFullYear() ? weekdayFmt : weekdayYearFmt).format(dt).replace(",", "");
+}
+
 export function fmtDate(iso: string): string {
   return dateFmt.format(new Date(iso));
 }

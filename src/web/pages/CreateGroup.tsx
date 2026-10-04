@@ -1,11 +1,11 @@
 import { useRef, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { CreateProjectSchema } from "@shared/api";
 import { useApi, useSession } from "../api/context";
 import { ApiError, errorMessage, fieldErrors } from "../api/errors";
 import { useSubmit } from "../api/idempotency";
 import { CurrencySelect, Field, Toggle } from "../components/Field";
-import { AppBar, BackButton, RequireSession, useTitle } from "../components/Shell";
+import { AppBar, RequireSession, useTitle } from "../components/Shell";
 import { useToast } from "../components/Toast";
 import { Turnstile, useTurnstileRequired, type TurnstileHandle } from "../components/Turnstile";
 import { Icon } from "../components/ui";
@@ -46,7 +46,9 @@ function CreateGroupInner() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [token, setToken] = useState<string | null>(null);
   const ts = useRef<TurnstileHandle>(null);
-  const needsToken = useTurnstileRequired();
+  // The server skips Turnstile for signed-in accounts; only guests with an email need it here.
+  const isAccount = me?.kind === "ACCOUNT";
+  const needsToken = useTurnstileRequired() && !isAccount;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -80,10 +82,12 @@ function CreateGroupInner() {
     <>
       <AppBar crumbs={<b>Create a group</b>} />
       <main id="main" className="page page-narrow">
-        <div className="page-top-m">
-          <BackButton to="/groups" />
+        <div className="page-head page-head-close">
+          <h1 className="page-h1">Create a group</h1>
+          <Link to="/groups" className="round-btn" aria-label="Close">
+            <Icon name="close" size={20} />
+          </Link>
         </div>
-        <h1 className="page-h1">Create a group</h1>
         <form className="stack-16" onSubmit={onSubmit} noValidate>
           <Field label="Group name" error={errors.name} hint="For example: Lisbon trip, Flat bills, Anna's birthday.">
             {(p) => (
@@ -117,7 +121,7 @@ function CreateGroupInner() {
               description={`Expenses can use different currencies, each with its own saved exchange rate. Everyone settles in ${currency}.`}
             />
           </div>
-          <Turnstile ref={ts} onToken={setToken} action="create_project" />
+          {!isAccount && <Turnstile ref={ts} onToken={setToken} action="create_project" />}
           {errors._form && (
             <div className="form-error" role="alert">
               <Icon name="error" size={18} />

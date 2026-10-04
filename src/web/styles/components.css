@@ -297,6 +297,11 @@
 .pill-sm {
   padding: 3px 9px;
 }
+.pill-xs {
+  padding: 2px 8px;
+  font-size: 11px;
+  gap: 5px;
+}
 
 .tag {
   font-size: 10px;
@@ -314,6 +319,10 @@
 .tag-adjust {
   background: var(--blue-soft);
   color: var(--blue);
+}
+.tag-current {
+  background: var(--ink);
+  color: var(--bg);
 }
 .tag-outline {
   display: inline-flex;
@@ -429,6 +438,15 @@
 .tone-red {
   background: var(--red-soft);
   color: var(--red);
+}
+.tone-deleted {
+  background: var(--surface2);
+  color: var(--ink2);
+  border: 1px dashed var(--line);
+}
+.member-deleted {
+  color: var(--ink2);
+  font-style: italic;
 }
 .avatar-ring {
   border: 2px solid var(--line);
@@ -1000,6 +1018,10 @@ button.row:hover {
   }
   .sheet-lg {
     width: min(720px, calc(100vw - 48px));
+  }
+  .sheet-sm {
+    width: min(560px, calc(100vw - 48px));
+    height: fit-content;
   }
   .sheet-panel {
     max-height: calc(100dvh - 64px);

@@ -4,7 +4,7 @@ import { Amount, Icon } from "../../components/ui";
 import { fmtDay, fmtMoney } from "../../lib/format";
 import { activeMembers, balanceOf, effectFor, nameOf } from "../../lib/project";
 import { useView } from "../../state/project";
-import { groupBase, sortEntries } from "./parts";
+import { groupBase, sortEntries, Who } from "./parts";
 
 export function BalanceExplain() {
   const view = useView();
@@ -130,7 +130,7 @@ export function BalanceExplain() {
               <li key={i.id} className="row-plain">
                 <Icon name={i.fromMemberId === who ? "north_east" : "south_west"} size={18} className="muted" />
                 <span className="grow">
-                  {nameOf(view, i.fromMemberId, { you: true })} → {nameOf(view, i.toMemberId, { you: true })}
+                  <Who view={view} id={i.fromMemberId} you /> → <Who view={view} id={i.toMemberId} you />
                 </span>
                 <Amount minor={i.amount} code={i.currency} exponent={i.exponent} />
               </li>

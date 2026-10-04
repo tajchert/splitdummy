@@ -7,13 +7,15 @@ import { useSubmit } from "../../api/idempotency";
 import { ConfirmDialog } from "../../components/Dialog";
 import { BackButton } from "../../components/Shell";
 import { useToast } from "../../components/Toast";
-import { Amount, Avatar, FinishTrack, Icon, Meta, StatusPill } from "../../components/ui";
-import { fmtDateTime, fmtDay, fmtMoney, fmtNumber, fmtRate, fmtShortDate } from "../../lib/format";
+import { Amount, Avatar, Banner, FinishTrack, Icon, Meta, StatusPill } from "../../components/ui";
+import { fmtDateTime, fmtDay, fmtMoney, fmtNumber, fmtRate, fmtShortDate, fmtWeekday } from "../../lib/format";
 import {
   activeMembers,
   balanceOf,
   confirmedCount,
+  isDeleted,
   nameOf,
+  notReadyAtFreeze,
   readinessOf,
   roundLabel,
   toneFor,
@@ -27,6 +29,12 @@ export function groupBase(projectId: string) {
   return `/g/${encodeURIComponent(projectId)}`;
 }
 
+/** A member's name; deleted accounts render muted. */
+export function Who({ view, id, you }: { view: ProjectViewDTO; id: string | null | undefined; you?: boolean }) {
+  const name = nameOf(view, id, { you });
+  return isDeleted(view, id) ? <span className="member-deleted">{name}</span> : <>{name}</>;
+}
+
 /* ---------- header ---------- */
 
 export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?: ReactNode }) {
@@ -34,7 +42,7 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
   const r = round.round;
   const base = groupBase(view.project.id);
   const isOwner = view.me.isOwner;
-  const notReadyAtFreeze = r.earlyFreezeReason ? view.members.filter((m) => !readinessOf(round, m.id) && m.status === "ACTIVE") : [];
+  const notReady = notReadyAtFreeze(view, round);
   return (
     <div className="ghead">
       <div className="ghead-top-m">
@@ -84,7 +92,7 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
                     <span className="mobile-only-inline">{fmtDateTime(r.frozenAt, true)}</span>
                     <span className="desktop-only-inline">
                       {fmtDateTime(r.frozenAt)}
-                      {r.frozenByMemberId ? ` · ${nameOf(view, r.frozenByMemberId)}` : ""}
+                      {r.frozenBySchedule ? " · automatically" : r.frozenByMemberId ? ` · ${nameOf(view, r.frozenByMemberId)}` : ""}
                     </span>
                   </Meta>
                 )}
@@ -93,10 +101,10 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
                     {confirmedCount(round)} of {round.instructions.length} confirmed
                   </Meta>
                 </span>
-                {notReadyAtFreeze.length > 0 && (
+                {notReady.length > 0 && (
                   <span className="desktop-only-inline">
                     <Meta icon="error">
-                      {notReadyAtFreeze.map((m) => m.displayName).join(", ")} not finished
+                      {notReady.map((m) => m.displayName).join(", ")} not finished
                     </Meta>
                   </span>
                 )}
@@ -108,6 +116,31 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
       </div>
       <FinishTrack progress={trackProgress(round)} size="lg" label={trackLabel(round)} />
     </div>
+  );
+}
+
+/** Explains an early freeze: who hadn't finished and the owner's reason, if they gave one. */
+export function FreezeNote({ view, round }: { view: ProjectViewDTO; round: RoundViewDTO }) {
+  const r = round.round;
+  const notReady = notReadyAtFreeze(view, round);
+  const names = notReady.map((m) => nameOf(view, m.id, { short: true })).join(", ");
+  if (r.frozenBySchedule) {
+    return (
+      <Banner tone="neutral" icon="event_available">
+        Frozen automatically on the scheduled date
+        <p>
+          {r.scheduledFreezeDate ? `The list froze at the end of ${fmtWeekday(r.scheduledFreezeDate)}. ` : ""}
+          {names ? `${names} hadn't finished adding by then.` : "Everyone had finished adding."}
+        </p>
+      </Banner>
+    );
+  }
+  if (!notReady.length && !r.earlyFreezeReason) return null;
+  return (
+    <Banner tone="neutral" icon="info">
+      {names ? `Frozen before ${names} finished` : "Frozen before everyone finished"}
+      <p>{r.earlyFreezeReason ? `${nameOf(view, r.frozenByMemberId)}: “${r.earlyFreezeReason}”` : `${nameOf(view, r.frozenByMemberId)} froze the list without giving a reason.`}</p>
+    </Banner>
   );
 }
 
@@ -166,7 +199,7 @@ export function EntryRow({ view, e, to }: { view: ProjectViewDTO; e: EntryDTO; t
           <span className="meta-item">
             <Icon name={e.type === "REFUND" ? "call_received" : e.type === "ADJUSTMENT" ? "edit_note" : "credit_card"} size={14} />
             <span className="sr-only">{e.type === "REFUND" ? "Received by" : e.type === "ADJUSTMENT" ? "Added by" : "Paid by"} </span>
-            {pname}
+            <Who view={view} id={payer} />
           </span>
           <span className="meta-item">
             <Icon name="group" size={14} />
@@ -227,7 +260,7 @@ export function BalanceCard({ view, compactTotals }: { view: ProjectViewDTO; com
           <Icon name="lock_open" size={14} />
           Can still change
         </span>
-        <Link to={`${base}/balance`} className="icon-btn desktop-only-grid" aria-label="How your balance is calculated">
+        <Link to={`${base}/balance`} className="icon-btn" aria-label="How your balance is calculated">
           <Icon name="help" size={19} />
         </Link>
       </div>
@@ -238,9 +271,7 @@ export function BalanceCard({ view, compactTotals }: { view: ProjectViewDTO; com
             <span className="sr-only">Group total </span>
             <b className="ink amount">{fmtMoney(round.totals.expenses, code, exp)}</b>
           </span>
-          <Link to={`${base}/balance`} className="icon-btn" aria-label="How your balance is calculated">
-            <Icon name="help" size={19} />
-          </Link>
+          <span className="tiny muted">spent by the group</span>
         </div>
       )}
     </section>
@@ -334,7 +365,14 @@ export function ReadinessCard({ view }: { view: ProjectViewDTO }) {
           return (
             <li key={m.id} className="ready-list-row">
               <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={30} />
-              <span className="ready-list-name">{nameOf(view, m.id, { you: true })}</span>
+              <span className="ready-list-name">
+                {nameOf(view, m.id, { you: true })}
+                {m.id === view.me.memberId && (
+                  <Link to={`${base}/settings#your-name`} className="icon-btn icon-btn-xs" aria-label="Change your name in this group">
+                    <Icon name="edit" size={15} />
+                  </Link>
+                )}
+              </span>
               <span className={`ready-list-status${st.ready ? " is-ready" : ""}`}>{st.text}</span>
             </li>
           );
@@ -401,7 +439,7 @@ export function TransferCard({ view, i }: { view: ProjectViewDTO; i: Instruction
       <div className="transfer-main">
         <div className="transfer-who-row">
           <span className="transfer-who">
-            {nameOf(view, i.fromMemberId, { you: true })} → {nameOf(view, i.toMemberId, { you: true })}
+            <Who view={view} id={i.fromMemberId} you /> → <Who view={view} id={i.toMemberId} you />
           </span>
           <b className="transfer-amt">
             <Amount minor={i.amount} code={i.currency} exponent={i.exponent} />
