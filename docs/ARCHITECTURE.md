@@ -50,3 +50,14 @@ If a contract is insufficient, extend it additively (new optional fields / new o
 - Errors: `ApiErrorBody` with codes from `api.ts`; field paths for form errors.
 - Tests: `npm run test:shared` (node), `npm run test:worker` (workerd via vitest-pool-workers), `npm run test:web` (jsdom).
 - Commits: small, conventional (`feat(core): …`, `fix(do): …`, `test(edge): …`).
+
+## Deploying
+
+```
+scripts/deploy.sh staging                  # → https://staging.splitdummy.app
+scripts/deploy.sh production               # → https://splitdummy.app
+scripts/deploy.sh <env> --init-secrets     # first deploy of an env: uploads TURNSTILE_SECRET from the widget via `cf`
+```
+
+The script typechecks, builds with Vite (`CLOUDFLARE_ENV` selects the env), applies D1 migrations remotely, then deploys.
+Local dev: `cp .dev.vars.example .dev.vars && npm run dev` (Turnstile test keys, devLink sign-in). UI-only: `VITE_MOCK=1 npm run dev`.
