@@ -205,6 +205,8 @@ export interface ProjectDTO {
   id: string;
   name: string;
   ownerMemberId: string;
+  /** Member with an open ownership offer (they must accept); null when none. */
+  pendingOwnerMemberId?: string | null;
   baseCurrency: string;
   baseExponent: number;
   multiCurrencyEnabled: boolean;
@@ -289,6 +291,29 @@ export interface InvitationPreviewDTO {
   baseCurrency: string;
   status: "OPEN" | "EXPIRED" | "REVOKED" | "MEMBERSHIP_FROZEN";
   alreadyMemberProjectId: string | null;
+}
+
+/** Mutation results that have no richer DTO (deleteRate, deleteEntry, principalUpdated). */
+export interface OkDTO {
+  ok: true;
+}
+
+/** POST /api/invitations/join */
+export interface JoinResultDTO {
+  projectId: string;
+  memberId: string;
+}
+
+/** POST .../rounds/:roundId/freeze */
+export interface FreezeResultDTO {
+  round: RoundDTO;
+  instructions: InstructionDTO[];
+}
+
+/** POST .../instructions/:instructionId/{sent,received,dispute}; round.status shows when it became SETTLED. */
+export interface InstructionResultDTO {
+  instruction: InstructionDTO;
+  round: RoundDTO;
 }
 
 // ---------- requests ----------

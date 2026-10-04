@@ -19,7 +19,8 @@ export default defineConfig({
         plugins: [
           cloudflareTest({
             wrangler: { configPath: "./wrangler.jsonc" },
-            miniflare: { bindings: { ENVIRONMENT: "test", APP_ORIGIN: "http://localhost" } },
+            // The pool bundles an older workerd than wrangler; pin to the newest date it supports.
+            miniflare: { compatibilityDate: "2026-08-22", bindings:{ ENVIRONMENT: "test", APP_ORIGIN: "http://localhost" } },
           }),
         ],
         test: { name: "worker", include: ["test/**/*.test.ts", "worker/**/*.test.ts"] },
