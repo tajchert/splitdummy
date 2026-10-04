@@ -217,7 +217,8 @@ export function directoryPayload(store: Store): DirectoryPayload {
       : [],
   );
   const instructions = round && round.status === "SETTLING" ? store.instructions(round.id) : [];
-  const members = store.members();
+  // A deleted account has no "My groups" row; its principal no longer exists.
+  const members = store.members().filter((m) => m.account_deleted !== 1);
 
   const nextAction = (m: MemberRow): NextAction | null => {
     if (m.status === "REMOVED" || !round) return null;

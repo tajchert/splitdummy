@@ -6,10 +6,12 @@ import {
   DeleteEntrySchema,
   ENDPOINTS,
   EntryInputSchema,
+  FreezeScheduleSchema,
   FreezeSchema,
   InstructionActionSchema,
   PutRateSchema,
   ReadinessSchema,
+  RenameMemberSchema,
   TransferOwnershipSchema,
   UpdateEntrySchema,
   UpdateSettingsSchema,
@@ -17,12 +19,11 @@ import {
 import type { DoOp } from "../do/types";
 import { requireIdempotencyKey, requireSession } from "../auth/middleware";
 import { toPrincipal } from "../auth/principals";
-import { verifyTurnstile } from "../auth/turnstile";
 import type { AppContext, AppEnv } from "../lib/context";
 import { sha256Hex } from "../lib/crypto";
 import { listProjects, rowFromProjectView, upsertStatement } from "../lib/directory";
 import { ApiError, notFound } from "../lib/errors";
-import { clientIp, parseWith, readJsonBody } from "../lib/http";
+import { parseWith, readJsonBody } from "../lib/http";
 import { logError } from "../lib/log";
 import { callProject, isOk, PROJECT_ID_RE, toHttpResponse } from "../lib/project";
 import { enforceLimit } from "../lib/ratelimit";
@@ -44,6 +45,7 @@ export const PROJECT_ROUTES = {
   revokeInvite: { op: "revokeInvite" },
   removeMember: { op: "removeMember" },
   leave: { op: "leave" },
+  renameMe: { op: "renameMe", schema: RenameMemberSchema },
   transferOwnership: { op: "transferOwnership", schema: TransferOwnershipSchema },
   acceptOwnership: { op: "acceptOwnership" },
   createEntry: { op: "createEntry", schema: EntryInputSchema },
@@ -53,6 +55,7 @@ export const PROJECT_ROUTES = {
   readiness: { op: "setReadiness", schema: ReadinessSchema },
   review: { op: "getReview" },
   freeze: { op: "freeze", schema: FreezeSchema },
+  freezeSchedule: { op: "setFreezeSchedule", schema: FreezeScheduleSchema },
   getRound: { op: "getRound" },
   sent: { op: "markSent", schema: InstructionActionSchema },
   received: { op: "markReceived", schema: InstructionActionSchema },
@@ -100,8 +103,9 @@ projectRoutes.post("/api/projects", async (c) => {
   }
   const idempotencyKey = requireIdempotencyKey(c);
   await enforceLimit(c.env.RL_CREATE_PROJECT, `principal:${principal.id}`);
-  const { turnstileToken, ...input } = parseWith(CreateProjectSchema, await readJsonBody(c.req.raw));
-  await verifyTurnstile(c.env, turnstileToken, clientIp(c.req.raw));
+  // Only signed-in accounts get here (verified email + session), so no Turnstile; the rate limit stays.
+  // A client may still send a token; it is ignored.
+  const { turnstileToken: _ignored, ...input } = parseWith(CreateProjectSchema, await readJsonBody(c.req.raw));
 
   // Derived from (principal, idempotency key) so a retried create lands on the same DO, which
   // then replays its committed response instead of creating a second project.
@@ -160,8 +164,11 @@ export async function recordMembership(c: AppContext, principalId: string, view:
     const row = rowFromProjectView(principalId, view);
     const statements = [];
     if (row) statements.push(upsertStatement(c.env.DB, row, ">"));
+    // Prefill only: an account name set via PATCH /api/me (or an earlier group) wins.
     statements.push(
-      c.env.DB.prepare("UPDATE principals SET display_name = ?, updated_at = ? WHERE id = ?").bind(displayName, Date.now(), principalId),
+      c.env.DB.prepare(
+        "UPDATE principals SET display_name = COALESCE(display_name, ?), updated_at = ? WHERE id = ?",
+      ).bind(displayName, Date.now(), principalId),
     );
     await c.env.DB.batch(statements);
   } catch (err) {

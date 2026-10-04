@@ -203,6 +203,13 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX outbox_pending ON outbox(sent_at, next_attempt_at);
   `,
+  `
+  ALTER TABLE members ADD COLUMN account_deleted INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE rounds ADD COLUMN scheduled_freeze_date TEXT;
+  ALTER TABLE rounds ADD COLUMN scheduled_freeze_time_zone TEXT;
+  ALTER TABLE rounds ADD COLUMN scheduled_freeze_at TEXT;
+  ALTER TABLE rounds ADD COLUMN frozen_by_schedule INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

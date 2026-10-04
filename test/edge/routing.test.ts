@@ -28,7 +28,23 @@ const validEntry = {
 
 describe("project routing", () => {
   it("every ENDPOINTS entry is routed (edge-handled or DO-mapped)", () => {
-    const edgeHandled = ["config", "me", "signIn", "verify", "verifySignIn", "signOut", "attachEmail", "listProjects", "createProject", "previewInvite", "join", "live"];
+    const edgeHandled = [
+      "config",
+      "me",
+      "updateMe",
+      "deletionPreview",
+      "deleteAccount",
+      "signIn",
+      "verify",
+      "verifySignIn",
+      "signOut",
+      "attachEmail",
+      "listProjects",
+      "createProject",
+      "previewInvite",
+      "join",
+      "live",
+    ];
     const mapped = Object.keys(PROJECT_ROUTES);
     expect([...edgeHandled, ...mapped].sort()).toEqual(Object.keys(ENDPOINTS).sort());
   });
@@ -65,6 +81,7 @@ describe("project routing", () => {
     ["DELETE", `/api/projects/${P}/invitations/inv_1`, "revokeInvite", { inviteId: "inv_1" }],
     ["DELETE", `/api/projects/${P}/members/m_2`, "removeMember", { memberId: "m_2" }],
     ["POST", `/api/projects/${P}/leave`, "leave", {}],
+    ["PATCH", `/api/projects/${P}/members/me`, "renameMe", {}],
     ["POST", `/api/projects/${P}/ownership`, "transferOwnership", {}],
     ["POST", `/api/projects/${P}/ownership/accept`, "acceptOwnership", {}],
     ["POST", `/api/projects/${P}/rounds/r_1/entries`, "createEntry", { roundId: "r_1" }],
@@ -73,6 +90,7 @@ describe("project routing", () => {
     ["PUT", `/api/projects/${P}/rounds/r_1/readiness/me`, "setReadiness", { roundId: "r_1" }],
     ["GET", `/api/projects/${P}/rounds/r_1/review`, "getReview", { roundId: "r_1" }],
     ["POST", `/api/projects/${P}/rounds/r_1/freeze`, "freeze", { roundId: "r_1" }],
+    ["PUT", `/api/projects/${P}/rounds/r_1/freeze-schedule`, "setFreezeSchedule", { roundId: "r_1" }],
     ["GET", `/api/projects/${P}/rounds/r_1`, "getRound", { roundId: "r_1" }],
     ["POST", `/api/projects/${P}/rounds/r_1/instructions/i_1/sent`, "markSent", { instructionId: "i_1" }],
     ["POST", `/api/projects/${P}/rounds/r_1/instructions/i_1/received`, "markReceived", { instructionId: "i_1" }],
@@ -100,6 +118,8 @@ describe("project routing", () => {
       },
       setReadiness: { ready: true },
       freeze: { expectedReviewVersion: 3 },
+      renameMe: { displayName: "Ann P." },
+      setFreezeSchedule: { date: "2026-12-24", timeZone: "Europe/Warsaw" },
     };
     const res = await call(path, { method, cookie, body: method === "GET" ? undefined : (bodies[op] ?? {}) });
     expect(res.status).toBe(200);
@@ -107,6 +127,18 @@ describe("project routing", () => {
     expect(calls[0]?.op).toBe(op);
     expect(calls[0]?.params).toMatchObject({ projectId: P, ...params });
     expect(calls[0]?.idempotencyKey === null).toBe(method === "GET");
+  });
+
+  it("routes PATCH members/me to renameMe, not removeMember, and validates the schedule body", async () => {
+    const { calls } = mockProjectDO(() => ({ status: 200, body: {} }));
+    await call(`/api/projects/${P}/members/me`, { method: "PATCH", cookie, body: { displayName: "  Ann  " } });
+    expect(calls[0]).toMatchObject({ op: "renameMe", body: { displayName: "Ann" } });
+    expect(calls[0]?.params).not.toHaveProperty("memberId");
+    const bad = await call(`/api/projects/${P}/rounds/r_1/freeze-schedule`, { method: "PUT", cookie, body: { date: "24.12.2026", timeZone: "UTC" } });
+    expect(bad.status).toBe(422);
+    expect((await bad.json<{ error: { field: string } }>()).error.field).toBe("date");
+    await call(`/api/projects/${P}/rounds/r_1/freeze-schedule`, { method: "PUT", cookie, body: { date: null, timeZone: "UTC" } });
+    expect(calls[1]).toMatchObject({ op: "setFreezeSchedule", body: { date: null, timeZone: "UTC" } });
   });
 
   it("applies schema defaults before calling the DO", async () => {

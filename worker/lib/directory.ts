@@ -24,11 +24,16 @@ export interface DirectoryRow {
  * never overwrite newer ones, so out-of-order delivery cannot regress a row.
  */
 export function upsertStatement(db: D1Database, row: DirectoryRow, minVersionOp: ">" | ">="): D1PreparedStatement {
+  // Tombstoned principals/projects (deleted accounts and groups) never get a row back.
   return db
     .prepare(
       `INSERT INTO project_directory
          (principal_id, project_id, member_id, is_owner, status, name, base_currency, round_status, round_sequence, next_action, project_version, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
+       WHERE NOT EXISTS (
+         SELECT 1 FROM directory_tombstones
+         WHERE (kind = 'PRINCIPAL' AND id = ?1) OR (kind = 'PROJECT' AND id = ?2)
+       )
        ON CONFLICT (principal_id, project_id) DO UPDATE SET
          member_id = excluded.member_id, is_owner = excluded.is_owner, status = excluded.status, name = excluded.name,
          base_currency = excluded.base_currency, round_status = excluded.round_status, round_sequence = excluded.round_sequence,
@@ -120,6 +125,15 @@ export async function listProjects(db: D1Database, principalId: string): Promise
     nextAction: r.next_action,
     updatedAt: r.updated_at,
   }));
+}
+
+/** Every directory row of a principal (any status), for account deletion. */
+export async function directoryEntries(db: D1Database, principalId: string): Promise<{ projectId: string; isOwner: boolean }[]> {
+  const { results } = await db
+    .prepare("SELECT project_id, is_owner FROM project_directory WHERE principal_id = ?")
+    .bind(principalId)
+    .all<{ project_id: string; is_owner: number }>();
+  return results.map((r) => ({ projectId: r.project_id, isOwner: r.is_owner === 1 }));
 }
 
 export async function projectIdsForPrincipal(db: D1Database, principalId: string): Promise<string[]> {
