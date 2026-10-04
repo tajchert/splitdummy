@@ -79,12 +79,30 @@ describe("POST /api/projects", () => {
     expect(await (await call("/api/projects", { cookie })).json()).toEqual([]);
   });
 
-  it("Turnstile failure blocks creation", async () => {
+  it("signed-in accounts create without Turnstile (a token, even a bad one, is ignored); the rate limit stays", async () => {
     const cookie = await signIn(uniqueEmail("owner"));
-    const { calls } = mockProjectDO(() => ({ status: 201, body: {} }));
-    const res = await call("/api/projects", { cookie, body: { ...createBody, turnstileToken: "fail" } });
-    expect(res.status).toBe(403);
-    expect(calls).toHaveLength(0);
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    fetchSpy.mockClear();
+    const { calls } = mockProjectDO((req) => ({ status: 201, body: projectView(req.params.projectId ?? "") }));
+    const { turnstileToken: _t, ...noToken } = createBody;
+    expect((await call("/api/projects", { cookie, body: noToken })).status).toBe(201);
+    expect((await call("/api/projects", { cookie, body: { ...createBody, turnstileToken: "fail" } })).status).toBe(201);
+    expect(calls).toHaveLength(2);
+    expect(fetchSpy.mock.calls.some(([input]) => String(input instanceof Request ? input.url : input).includes("turnstile"))).toBe(false);
+
+    const limited = { ...testEnv, RL_CREATE_PROJECT: { limit: async () => ({ success: false }) } } as unknown as Env;
+    const res = await call("/api/projects", { cookie, body: noToken, env: limited });
+    expect(res.status).toBe(429);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("creating or joining doesn't overwrite an account name that is already set", async () => {
+    const cookie = await signIn(uniqueEmail("owner"));
+    await call("/api/me", { method: "PATCH", cookie, body: { displayName: "Ann Account" } });
+    mockProjectDO((req) => ({ status: 201, body: projectView(req.params.projectId ?? "") }));
+    await call("/api/projects", { cookie, body: { ...createBody, ownerDisplayName: "Trip Ann" } });
+    const me = await (await call("/api/me", { cookie })).json<{ displayName: string }>();
+    expect(me.displayName).toBe("Ann Account");
   });
 });
 

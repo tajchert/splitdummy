@@ -5,6 +5,7 @@ import { ApiError } from "./lib/errors";
 import { logError } from "./lib/log";
 import { handleQueue } from "./queue/consumer";
 import { handleScheduled } from "./queue/scheduled";
+import { accountRoutes } from "./routes/account";
 import { authRoutes } from "./routes/auth";
 import { invitationRoutes } from "./routes/invitations";
 import { liveRoutes } from "./routes/live";
@@ -27,6 +28,7 @@ app.use("/api/*", async (c, next) => {
 app.use("/api/*", originGuard);
 
 app.route("/", authRoutes);
+app.route("/", accountRoutes);
 app.route("/", liveRoutes);
 app.route("/", invitationRoutes);
 app.route("/", projectRoutes);

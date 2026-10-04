@@ -1,6 +1,7 @@
+import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { EntryInput, ProjectViewDTO } from "@shared/api";
-import type { DoOp, DoResponse, Principal } from "../../worker/do/types";
+import { PRINCIPAL_HEADER, type DoOp, type DoResponse, type Principal } from "../../worker/do/types";
 
 let counter = 0;
 const uid = () => `${Date.now().toString(36)}${(counter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -131,3 +132,33 @@ export async function freezeNow(group: Group, reason?: string) {
     earlyFreezeReason: reason,
   });
 }
+
+/** Opens a live socket to the DO as `principal` and collects every message. */
+export async function listen(stub: Stub, principal: Principal | null) {
+  const res = await stub.fetch("https://do/live", {
+    headers: { Upgrade: "websocket", [PRINCIPAL_HEADER]: JSON.stringify(principal) },
+  });
+  if (res.status !== 101) throw new Error(`live upgrade failed: ${res.status}`);
+  const ws = res.webSocket!;
+  const messages: any[] = [];
+  const closes: number[] = [];
+  ws.accept();
+  ws.addEventListener("message", (e) => {
+    messages.push(JSON.parse(e.data as string));
+  });
+  ws.addEventListener("close", (e) => {
+    closes.push(e.code);
+  });
+  return { ws, messages, closes };
+}
+
+export async function waitFor(cond: () => boolean, timeoutMs = 2000): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error("timed out");
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
+export const sqlIn = <T = Record<string, unknown>>(stub: Stub, query: string, ...args: (string | number)[]) =>
+  runInDurableObject(stub, (_i, state) => state.storage.sql.exec(query, ...args).toArray() as T[]);

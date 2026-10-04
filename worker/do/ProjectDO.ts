@@ -9,18 +9,27 @@
 import { DurableObject } from "cloudflare:workers";
 import type { LiveMessage } from "@shared/api";
 import { ApiError, invalid, unauthenticated } from "./errors";
-import { acceptOwnership, createInvite, createProject, deleteRate, join, leave, previewInvite, principalUpdated, putRate, removeMember, revokeInvite, transferOwnership, updateSettings, type OpResult } from "./ops/project";
+import { accountDeletionInfo, anonymizeMember, deletionPrincipals } from "./ops/account";
+import { acceptOwnership, createInvite, createProject, deleteRate, join, leave, previewInvite, principalUpdated, putRate, removeMember, renameMe, revokeInvite, transferOwnership, updateSettings, type OpResult } from "./ops/project";
 import { createAdjustment, createEntry, deleteEntry, setReadiness, updateEntry } from "./ops/ledger";
 import { backupSnapshot, exportCsv, getHistory, getProject, getReview, getRound } from "./ops/read";
-import { freeze, markDisputed, markReceived, markSent, startRound } from "./ops/settlement";
+import { freeze, markDisputed, markReceived, markSent, scheduledFreeze, setFreezeSchedule, startRound } from "./ops/settlement";
 import { migrate } from "./schema";
 import { Store } from "./store";
 import { Tx } from "./tx";
 import { PRINCIPAL_HEADER, type DoOp, type DoRequest, type DoResponse, type OutboxMessage, type Principal, type ProjectDORpc } from "./types";
 
 type Prepared = { secret?: string; secretHash?: string };
-type MutationOp = Exclude<DoOp, ReadOp>;
-type ReadOp = "getProject" | "previewInvite" | "getReview" | "getRound" | "getHistory" | "exportCsv" | "backupSnapshot";
+type MutationOp = Exclude<DoOp, ReadOp | "deleteProject">;
+type ReadOp =
+  | "getProject"
+  | "previewInvite"
+  | "getReview"
+  | "getRound"
+  | "getHistory"
+  | "exportCsv"
+  | "backupSnapshot"
+  | "accountDeletionInfo";
 
 const READ_OPS: Record<ReadOp, (tx: Tx, req: DoRequest, prepared: Prepared) => DoResponse> = {
   getProject: (tx) => getProject(tx),
@@ -30,14 +39,17 @@ const READ_OPS: Record<ReadOp, (tx: Tx, req: DoRequest, prepared: Prepared) => D
   getHistory: (tx) => getHistory(tx),
   exportCsv: (tx) => exportCsv(tx),
   backupSnapshot: (tx) => backupSnapshot(tx),
+  accountDeletionInfo: (tx) => accountDeletionInfo(tx),
 };
 
 /** Ops that the edge calls on its own behalf without an idempotency key. */
-const KEYLESS_OPS = new Set<DoOp>(["principalUpdated"]);
+const KEYLESS_OPS = new Set<DoOp>(["principalUpdated", "anonymizeMember"]);
 
 const OUTBOX_BATCH = 20;
 const OUTBOX_MAX_BACKOFF_MS = 10 * 60 * 1000;
 const OUTBOX_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+/** A scheduled freeze that failed (it never should) is retried after this delay, not in a tight loop. */
+const SCHEDULED_FREEZE_RETRY_MS = 10 * 60 * 1000;
 
 export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
   private readonly store: Store;
@@ -47,7 +59,7 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
     this.store = new Store(ctx.storage.sql);
     ctx.blockConcurrencyWhile(async () => {
       ctx.storage.transactionSync(() => migrate(ctx.storage.sql));
-      await this.armOutboxAlarm();
+      await this.armAlarm();
     });
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
@@ -67,6 +79,7 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
   }
 
   private async dispatch(req: DoRequest): Promise<DoResponse> {
+    if (req.op === "deleteProject") return this.deleteProject(req);
     const prepared = await this.prepare(req);
     if (req.op in READ_OPS) {
       const tx = new Tx(this.store, req.principal);
@@ -126,9 +139,26 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
       for (const memberId of outcome.disconnect) {
         for (const ws of this.ctx.getWebSockets(memberId)) closeQuietly(ws, 4403, "removed");
       }
-      if (outcome.outbox) await this.armOutboxAlarm();
+      await this.armAlarm();
     }
     return outcome.response;
+  }
+
+  /**
+   * Owner deletes the whole project (account deletion). Wipes all storage and the alarm; the
+   * schema is recreated empty, so this and any later instance answer 404 until a createProject.
+   */
+  private async deleteProject(req: DoRequest): Promise<DoResponse> {
+    // Checked before blockConcurrencyWhile (a throw inside it resets the object) but in the same
+    // turn, so nothing can interleave between the owner check and the wipe.
+    const memberPrincipalIds = deletionPrincipals(new Tx(this.store, req.principal));
+    await this.ctx.blockConcurrencyWhile(async () => {
+      for (const ws of this.ctx.getWebSockets()) closeQuietly(ws, 4404, "deleted");
+      await this.ctx.storage.deleteAlarm();
+      await this.ctx.storage.deleteAll();
+      this.ctx.storage.transactionSync(() => migrate(this.ctx.storage.sql));
+    });
+    return { status: 200, body: { memberPrincipalIds } };
   }
 
   /** Async work that must finish before the synchronous transaction starts. */
@@ -195,6 +225,12 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
         return markDisputed(tx, req);
       case "startRound":
         return startRound(tx);
+      case "renameMe":
+        return renameMe(tx, req);
+      case "setFreezeSchedule":
+        return setFreezeSchedule(tx, req);
+      case "anonymizeMember":
+        return anonymizeMember(tx);
       case "principalUpdated":
         return principalUpdated(tx, req);
       default: {
@@ -249,9 +285,41 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
     }
   }
 
-  // ---------- outbox ----------
+  // ---------- alarm: scheduled freeze + outbox ----------
 
+  /**
+   * One alarm serves both the scheduled freeze and outbox publication. Never throws (a throwing
+   * alarm is retried by the runtime); always re-arms for whatever is due next.
+   */
   async alarm(): Promise<void> {
+    let freezeFailed = false;
+    try {
+      this.runScheduledFreeze();
+    } catch (err) {
+      freezeFailed = true;
+      console.error("scheduled freeze failed", { error: String(err) });
+    }
+    try {
+      await this.publishOutbox();
+    } catch (err) {
+      console.error("outbox publication failed", { error: String(err) });
+    }
+    await this.armAlarm(freezeFailed);
+  }
+
+  /** Freezes the active round if its scheduled instant has passed; a no-op when nothing is due. */
+  private runScheduledFreeze(): void {
+    const outcome = this.ctx.storage.transactionSync(() => {
+      const tx = new Tx(this.store, null);
+      const roundId = scheduledFreeze(tx, Date.now());
+      if (!roundId) return null;
+      const { projectVersion } = tx.finish();
+      return { projectVersion, roundId };
+    });
+    if (outcome) this.broadcast({ type: "changed", projectVersion: outcome.projectVersion, roundId: outcome.roundId, reason: "freeze" });
+  }
+
+  private async publishOutbox(): Promise<void> {
     const now = Date.now();
     const rows = this.store.all<{ seq: number; message_json: string; attempts: number }>(
       "SELECT seq, message_json, attempts FROM outbox WHERE sent_at IS NULL AND next_attempt_at <= ? ORDER BY seq LIMIT ?",
@@ -283,15 +351,29 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
       "DELETE FROM outbox WHERE sent_at IS NOT NULL AND created_at < ?",
       new Date(now - OUTBOX_RETENTION_MS).toISOString(),
     );
-    await this.armOutboxAlarm();
   }
 
-  private async armOutboxAlarm(): Promise<void> {
-    const next = this.store.first<{ t: number | null }>("SELECT MIN(next_attempt_at) AS t FROM outbox WHERE sent_at IS NULL");
-    if (next?.t === null || next?.t === undefined) return;
+  /**
+   * Sets the alarm to exactly min(next outbox retry, scheduled freeze instant), or clears it when
+   * neither is pending. Derived from durable state each time, so it's safe to call after any change.
+   */
+  private async armAlarm(freezeFailed = false): Promise<void> {
+    const now = Date.now();
+    const outbox = this.store.first<{ t: number | null }>("SELECT MIN(next_attempt_at) AS t FROM outbox WHERE sent_at IS NULL");
+    const round = this.store.first<{ at: string | null }>(
+      `SELECT r.scheduled_freeze_at AS at FROM rounds r JOIN project p ON p.active_round_id = r.id
+       WHERE r.status = 'COLLECTING' AND r.scheduled_freeze_at IS NOT NULL`,
+    );
+    const due: number[] = [];
+    if (outbox?.t !== null && outbox?.t !== undefined) due.push(Number(outbox.t));
+    if (round?.at) due.push(freezeFailed ? now + SCHEDULED_FREEZE_RETRY_MS : Date.parse(round.at));
     const current = await this.ctx.storage.getAlarm();
-    const at = Math.max(Number(next.t), Date.now());
-    if (current === null || current > at) await this.ctx.storage.setAlarm(at);
+    if (due.length === 0) {
+      if (current !== null) await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    const at = Math.max(Math.min(...due), now);
+    if (current !== at) await this.ctx.storage.setAlarm(at);
   }
 }
 

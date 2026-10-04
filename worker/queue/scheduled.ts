@@ -49,6 +49,8 @@ async function housekeeping(env: Env): Promise<void> {
       env.DB.prepare("DELETE FROM sign_in_tokens WHERE expires_at < ?").bind(now - DAY_MS),
       env.DB.prepare("DELETE FROM sessions WHERE expires_at < ? OR revoked_at < ?").bind(now, now - 30 * DAY_MS),
       env.DB.prepare("DELETE FROM processed_events WHERE processed_at < ?").bind(now - 30 * DAY_MS),
+      // Late outbox deliveries are long retried or dead-lettered by then.
+      env.DB.prepare("DELETE FROM directory_tombstones WHERE deleted_at < ?").bind(now - 30 * DAY_MS),
       // Guests whose every session lapsed and who never joined anything are unreachable.
       env.DB.prepare(
         `DELETE FROM principals WHERE kind = 'GUEST' AND email IS NULL AND created_at < ?
