@@ -1,0 +1,9 @@
+{
+  "name": "Splitdummy",
+  "short_name": "Splitdummy",
+  "start_url": "/groups",
+  "display": "standalone",
+  "background_color": "#F7F2EA",
+  "theme_color": "#F7F2EA",
+  "icons": [{ "src": "/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
