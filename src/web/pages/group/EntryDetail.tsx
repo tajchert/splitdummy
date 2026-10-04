@@ -10,7 +10,7 @@ import { Amount, Avatar, Banner, Icon } from "../../components/ui";
 import { fmtDateTime, fmtDay, fmtMoney, fmtRate } from "../../lib/format";
 import { canEditEntry, nameOf, roundLabel, toneFor } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
-import { groupBase } from "./parts";
+import { groupBase, Who } from "./parts";
 
 /** Provided by routes that show entries of a specific (possibly historical) round. */
 export interface RoundOutletContext {
@@ -208,7 +208,9 @@ function EntryDetailInner({ view, round, entry: e, onClose }: { view: ProjectVie
             {(e.adjustmentEffects ?? []).map((x) => (
               <div key={x.memberId} className="row detail-share">
                 <Avatar name={nameOf(view, x.memberId)} tone={toneFor(view, x.memberId)} size={28} />
-                <span className="grow">{nameOf(view, x.memberId, { you: true })}</span>
+                <span className="grow">
+                  <Who view={view} id={x.memberId} you />
+                </span>
                 <Amount minor={x.baseAmount} code={e.baseCurrency} exponent={e.baseExponent} signed tone="auto" />
               </div>
             ))}
@@ -220,7 +222,7 @@ function EntryDetailInner({ view, round, entry: e, onClose }: { view: ProjectVie
             <span className="muted small">{e.type === "REFUND" ? "Received by" : "Paid by"}</span>
             <span className="detail-person">
               <Avatar name={nameOf(view, e.payerMemberId)} tone={toneFor(view, e.payerMemberId ?? "")} size={26} />
-              {nameOf(view, e.payerMemberId, { you: true })}
+              <Who view={view} id={e.payerMemberId} you />
             </span>
           </section>
           <section aria-labelledby="shares-h" className="stack-8">
@@ -236,7 +238,9 @@ function EntryDetailInner({ view, round, entry: e, onClose }: { view: ProjectVie
                 .map((a) => (
                   <div key={a.memberId} className="row detail-share">
                     <Avatar name={nameOf(view, a.memberId)} tone={toneFor(view, a.memberId)} size={28} />
-                    <span className="grow">{nameOf(view, a.memberId, { you: true })}</span>
+                    <span className="grow">
+                      <Who view={view} id={a.memberId} you />
+                    </span>
                     <span className="detail-share-amt">
                       <Amount minor={a.originalAmount} code={e.originalCurrency} exponent={e.originalExponent} />
                       {foreign && <Amount className="tiny muted" minor={a.baseAmount} code={e.baseCurrency} exponent={e.baseExponent} />}
