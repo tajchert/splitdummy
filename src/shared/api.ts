@@ -205,14 +205,14 @@ export interface ProjectDTO {
   id: string;
   name: string;
   ownerMemberId: string;
-  /** Member with an open ownership offer (they must accept); null when none. */
-  pendingOwnerMemberId?: string | null;
   baseCurrency: string;
   baseExponent: number;
   multiCurrencyEnabled: boolean;
   /** True once any ledger entry has ever been committed. */
   baseCurrencyLocked: boolean;
   activeRoundId: string | null;
+  /** Member offered ownership (pending acceptance), if any. */
+  pendingOwnerMemberId?: string | null;
   version: number;
   createdAt: string;
 }
@@ -291,29 +291,6 @@ export interface InvitationPreviewDTO {
   baseCurrency: string;
   status: "OPEN" | "EXPIRED" | "REVOKED" | "MEMBERSHIP_FROZEN";
   alreadyMemberProjectId: string | null;
-}
-
-/** Mutation results that have no richer DTO (deleteRate, deleteEntry, principalUpdated). */
-export interface OkDTO {
-  ok: true;
-}
-
-/** POST /api/invitations/join */
-export interface JoinResultDTO {
-  projectId: string;
-  memberId: string;
-}
-
-/** POST .../rounds/:roundId/freeze */
-export interface FreezeResultDTO {
-  round: RoundDTO;
-  instructions: InstructionDTO[];
-}
-
-/** POST .../instructions/:instructionId/{sent,received,dispute}; round.status shows when it became SETTLED. */
-export interface InstructionResultDTO {
-  instruction: InstructionDTO;
-  round: RoundDTO;
 }
 
 // ---------- requests ----------
@@ -455,3 +432,31 @@ export const ENDPOINTS = {
 export type LiveMessage =
   | { type: "hello"; projectVersion: number }
   | { type: "changed"; projectVersion: number; roundId: string | null; reason: string };
+
+// ---------- mutation responses ----------
+// createProject → 201 ProjectViewDTO · getProject → ProjectViewDTO · getRound → RoundViewDTO
+// getReview → ReviewDTO · getHistory → HistoryDTO · previewInvite → InvitationPreviewDTO
+// updateSettings / transferOwnership / acceptOwnership → ProjectDTO
+// putRate → RateDefaultDTO · deleteRate → OkDTO
+// createInvite → 201 InvitationDTO (url = `${APP_ORIGIN}/join#${projectId}.${secret}` — token in the
+//   fragment so it never reaches server logs; the join page reads location.hash) · revokeInvite → InvitationDTO
+// join → JoinResultDTO · removeMember / leave → MemberDTO
+// createEntry / createAdjustment → 201 EntryDTO · updateEntry → EntryDTO · deleteEntry → OkDTO
+// setReadiness → ReadinessDTO · freeze → FreezeResultDTO
+// markSent / markReceived / markDisputed → InstructionResultDTO (round.status shows SETTLED completion)
+// startRound → 201 RoundDTO · export → text/csv with content-disposition
+export interface OkDTO {
+  ok: true;
+}
+export interface JoinResultDTO {
+  projectId: string;
+  memberId: string;
+}
+export interface FreezeResultDTO {
+  round: RoundDTO;
+  instructions: InstructionDTO[];
+}
+export interface InstructionResultDTO {
+  instruction: InstructionDTO;
+  round: RoundDTO;
+}
