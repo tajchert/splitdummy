@@ -292,15 +292,18 @@ export class Store {
 
   /** Member IDs referenced anywhere (for MemberDTO.referenced without N queries). */
   referencedMemberIds(): Set<string> {
-    const rows = this.all<{ id: string }>(
-      `SELECT creator_member_id AS id FROM entries WHERE deleted = 0
-       UNION SELECT payer_member_id FROM entries WHERE deleted = 0 AND payer_member_id IS NOT NULL
-       UNION SELECT c.member_id FROM contributions c JOIN entries e ON e.id = c.entry_id WHERE e.deleted = 0
-       UNION SELECT a.member_id FROM allocations a JOIN entries e ON e.id = a.entry_id WHERE e.deleted = 0
-       UNION SELECT x.member_id FROM adjustment_effects x JOIN entries e ON e.id = x.entry_id WHERE e.deleted = 0
-       UNION SELECT from_member_id FROM instructions
-       UNION SELECT to_member_id FROM instructions`,
-    );
-    return new Set(rows.map((r) => r.id));
+    // DO SQLite caps compound SELECT terms, so gather each source separately.
+    const queries = [
+      "SELECT DISTINCT creator_member_id AS id FROM entries WHERE deleted = 0",
+      "SELECT DISTINCT payer_member_id AS id FROM entries WHERE deleted = 0 AND payer_member_id IS NOT NULL",
+      "SELECT DISTINCT c.member_id AS id FROM contributions c JOIN entries e ON e.id = c.entry_id WHERE e.deleted = 0",
+      "SELECT DISTINCT a.member_id AS id FROM allocations a JOIN entries e ON e.id = a.entry_id WHERE e.deleted = 0",
+      "SELECT DISTINCT x.member_id AS id FROM adjustment_effects x JOIN entries e ON e.id = x.entry_id WHERE e.deleted = 0",
+      "SELECT DISTINCT from_member_id AS id FROM instructions",
+      "SELECT DISTINCT to_member_id AS id FROM instructions",
+    ];
+    const ids = new Set<string>();
+    for (const q of queries) for (const r of this.all<{ id: string }>(q)) ids.add(r.id);
+    return ids;
   }
 }
