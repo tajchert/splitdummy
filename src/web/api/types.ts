@@ -4,8 +4,11 @@ import type {
   AttachEmailSchema,
   ConfigDTO,
   CreateProjectSchema,
+  DeleteAccountSchema,
   DeleteEntrySchema,
+  DeletionPreviewDTO,
   EntryInput,
+  FreezeScheduleSchema,
   FreezeSchema,
   HistoryDTO,
   InstructionActionSchema,
@@ -13,17 +16,21 @@ import type {
   InvitationPreviewDTO,
   JoinSchema,
   MeDTO,
+  MemberDTO,
   ProjectSummaryDTO,
   ProjectViewDTO,
   PutRateSchema,
   ReadinessSchema,
+  RenameMemberSchema,
   RequestSignInSchema,
   ReviewDTO,
+  RoundDTO,
   RoundViewDTO,
   SignInRequestedDTO,
   SignInVerifiedDTO,
   TransferOwnershipSchema,
   UpdateEntrySchema,
+  UpdateMeSchema,
   UpdateSettingsSchema,
 } from "@shared/api";
 
@@ -41,6 +48,10 @@ export type ReadinessBody = z.input<typeof ReadinessSchema>;
 export type FreezeBody = z.input<typeof FreezeSchema>;
 export type InstructionActionBody = z.input<typeof InstructionActionSchema>;
 export type TransferOwnershipBody = z.input<typeof TransferOwnershipSchema>;
+export type UpdateMeBody = z.input<typeof UpdateMeSchema>;
+export type RenameMemberBody = z.input<typeof RenameMemberSchema>;
+export type FreezeScheduleBody = z.input<typeof FreezeScheduleSchema>;
+export type DeleteAccountBody = z.input<typeof DeleteAccountSchema>;
 
 /** Every mutation carries the key of its logical submit; retries of that submit reuse it. */
 export interface MutationOptions {
@@ -70,6 +81,11 @@ export interface Api {
   verifySignIn(token: string, o: MutationOptions): Promise<SignInVerifiedDTO>;
   signOut(o: MutationOptions): Promise<void>;
   attachEmail(body: AttachEmailBody, o: MutationOptions): Promise<SignInRequestedDTO>;
+  /** Account-level default name; null clears it. */
+  updateMe(body: UpdateMeBody, o: MutationOptions): Promise<MeDTO>;
+  getDeletionPreview(): Promise<DeletionPreviewDTO>;
+  /** 409 ACCOUNT_HAS_OPEN_TRANSFERS while any joined group has unconfirmed transfers. Clears the session. */
+  deleteAccount(body: DeleteAccountBody, o: MutationOptions): Promise<void>;
 
   listProjects(): Promise<ProjectSummaryDTO[]>;
   createProject(body: CreateProjectBody, o: MutationOptions): Promise<ProjectViewDTO>;
@@ -87,6 +103,8 @@ export interface Api {
   leave(projectId: string, o: MutationOptions): Promise<void>;
   transferOwnership(projectId: string, body: TransferOwnershipBody, o: MutationOptions): Promise<void>;
   acceptOwnership(projectId: string, o: MutationOptions): Promise<void>;
+  /** Your own display name in this group. */
+  renameMe(projectId: string, body: RenameMemberBody, o: MutationOptions): Promise<MemberDTO>;
 
   createEntry(projectId: string, roundId: string, body: EntryBody, o: MutationOptions): Promise<void>;
   updateEntry(projectId: string, roundId: string, entryId: string, body: UpdateEntryBody, o: MutationOptions): Promise<void>;
@@ -96,6 +114,8 @@ export interface Api {
   setReadiness(projectId: string, roundId: string, body: ReadinessBody, o: MutationOptions): Promise<void>;
   getReview(projectId: string, roundId: string): Promise<ReviewDTO>;
   freeze(projectId: string, roundId: string, body: FreezeBody, o: MutationOptions): Promise<void>;
+  /** Owner sets (date) or clears (null) the automatic freeze date of the collecting round. */
+  setFreezeSchedule(projectId: string, roundId: string, body: FreezeScheduleBody, o: MutationOptions): Promise<RoundDTO>;
   getRound(projectId: string, roundId: string): Promise<RoundViewDTO>;
 
   markSent(projectId: string, roundId: string, instructionId: string, body: InstructionActionBody, o: MutationOptions): Promise<void>;

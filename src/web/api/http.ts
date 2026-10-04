@@ -1,13 +1,16 @@
 import type {
   ConfigDTO,
+  DeletionPreviewDTO,
   HistoryDTO,
   InvitationDTO,
   InvitationPreviewDTO,
   LiveMessage,
   MeDTO,
+  MemberDTO,
   ProjectSummaryDTO,
   ProjectViewDTO,
   ReviewDTO,
+  RoundDTO,
   RoundViewDTO,
   SignInRequestedDTO,
   SignInVerifiedDTO,
@@ -102,6 +105,9 @@ export function createHttpApi(opts: HttpOptions = {}): Api {
     verifySignIn: (token, o) => request<SignInVerifiedDTO>("POST", "/api/auth/verify", { token }, o),
     signOut: (o) => request<void>("POST", "/api/auth/logout", {}, o),
     attachEmail: (body, o) => request<SignInRequestedDTO>("POST", "/api/me/email", body, o),
+    updateMe: (body, o) => request<MeDTO>("PATCH", "/api/me", body, o),
+    getDeletionPreview: () => get<DeletionPreviewDTO>("/api/me/deletion-preview"),
+    deleteAccount: (body, o) => request<void>("DELETE", "/api/me", body, o),
 
     async listProjects() {
       const r = await get<{ projects: ProjectSummaryDTO[] } | ProjectSummaryDTO[]>("/api/projects");
@@ -122,6 +128,7 @@ export function createHttpApi(opts: HttpOptions = {}): Api {
     leave: (id, o) => request("POST", `${P(id)}/leave`, {}, o),
     transferOwnership: (id, body, o) => request("POST", `${P(id)}/ownership`, body, o),
     acceptOwnership: (id, o) => request("POST", `${P(id)}/ownership/accept`, {}, o),
+    renameMe: (id, body, o) => request<MemberDTO>("PATCH", `${P(id)}/members/me`, body, o),
 
     createEntry: (id, r, body, o) => request("POST", `${R(id, r)}/entries`, body, o),
     updateEntry: (id, r, e, body, o) => request("PATCH", `${R(id, r)}/entries/${enc(e)}`, body, o),
@@ -131,6 +138,7 @@ export function createHttpApi(opts: HttpOptions = {}): Api {
     setReadiness: (id, r, body, o) => request("PUT", `${R(id, r)}/readiness/me`, body, o),
     getReview: (id, r) => get<ReviewDTO>(`${R(id, r)}/review`),
     freeze: (id, r, body, o) => request("POST", `${R(id, r)}/freeze`, body, o),
+    setFreezeSchedule: (id, r, body, o) => request<RoundDTO>("PUT", `${R(id, r)}/freeze-schedule`, body, o),
     getRound: (id, r) => get<RoundViewDTO>(R(id, r)),
 
     markSent: (id, r, i, body, o) => request("POST", `${R(id, r)}/instructions/${enc(i)}/sent`, body, o),
