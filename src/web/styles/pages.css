@@ -2079,9 +2079,7 @@
   place-items: center;
   padding: 28px 0;
   border-radius: 24px;
-  background:
-    radial-gradient(circle at 50% 55%, var(--surface) 0 46px, transparent 47px),
-    var(--green-soft);
+  background: var(--green-soft);
 }
 .confirm-coin {
   position: relative;
