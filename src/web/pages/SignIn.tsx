@@ -75,54 +75,72 @@ export function SignIn() {
         <span style={{ width: 36 }} />
       </header>
       <main id="main" className="narrow-main">
-        <h1 className="page-h1">Sign in</h1>
-        <p className="muted lede">We'll email you a sign-in link. No password needed.</p>
-
-        {linkError && (
-          <Banner tone="amber" icon="schedule" role="alert">
-            That sign-in link has expired, was already used, or isn't valid.
-            <p>Links work once and for 15 minutes. Request a new one below.</p>
-          </Banner>
-        )}
-        {reason === "account" && (
-          <Banner tone="blue" icon="info">
-            Creating a group needs an email address, so you can always get back to it.
-          </Banner>
-        )}
-        {me && !linkError && (
-          <Banner tone="neutral" icon="person">
-            You're signed in{me.email ? ` as ${me.email}` : " as a guest"}.{" "}
-            <Link to="/groups" className="link-btn">
+        {me?.kind === "ACCOUNT" ? (
+          <>
+            <h1 className="page-h1">You're already signed in</h1>
+            <Banner tone="neutral" icon="person">
+              You're signed in as <b className="ink">{me.email}</b>.
+            </Banner>
+            <Link to="/groups" className="btn btn-primary btn-block">
+              <Icon name="group" size={20} />
               Go to my groups
             </Link>
-          </Banner>
-        )}
+            <p className="tiny muted">
+              Want to use a different email? Sign out from <Link to="/account">your account</Link> first.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="page-h1">Sign in</h1>
+            <p className="muted lede">We'll email you a sign-in link. No password needed.</p>
 
-        <form className="stack-16" onSubmit={onSubmit} noValidate>
-          <Field label="Email" error={f.error ?? undefined}>
-            {(p) => (
-              <input
-                {...p}
-                className="input"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                autoFocus
-                placeholder="name@example.com"
-                value={f.email}
-                onChange={(e) => f.setEmail(e.target.value)}
-              />
+            {linkError && (
+              <Banner tone="amber" icon="schedule" role="alert">
+                That sign-in link has expired, was already used, or isn't valid.
+                <p>Links work once and for 15 minutes. Request a new one below.</p>
+              </Banner>
             )}
-          </Field>
-          <Turnstile ref={f.ts} onToken={f.setToken} action="sign_in" />
-          <button type="submit" className="btn btn-primary btn-block" disabled={f.pending}>
-            <Icon name="mail" size={20} />
-            {f.pending ? "Sending…" : "Email me a sign-in link"}
-          </button>
-        </form>
-        <p className="tiny muted">
-          Joining a group from an invitation? Open the link you were sent; you can join as a guest without an email.
-        </p>
+            {reason === "account" && (
+              <Banner tone="blue" icon="info">
+                Creating a group needs an email address, so you can always get back to it.
+              </Banner>
+            )}
+            {me && !linkError && (
+              <Banner tone="neutral" icon="person">
+                You're using Splitdummy as a guest. Sign in with your email to keep your groups on any device.{" "}
+                <Link to="/groups" className="link-btn">
+                  Go to my groups
+                </Link>
+              </Banner>
+            )}
+
+            <form className="stack-16" onSubmit={onSubmit} noValidate>
+              <Field label="Email" error={f.error ?? undefined}>
+                {(p) => (
+                  <input
+                    {...p}
+                    className="input"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoFocus
+                    placeholder="name@example.com"
+                    value={f.email}
+                    onChange={(e) => f.setEmail(e.target.value)}
+                  />
+                )}
+              </Field>
+              <Turnstile ref={f.ts} onToken={f.setToken} action="sign_in" />
+              <button type="submit" className="btn btn-primary btn-block" disabled={f.pending}>
+                <Icon name="mail" size={20} />
+                {f.pending ? "Sending…" : "Email me a sign-in link"}
+              </button>
+            </form>
+            <p className="tiny muted">
+              Joining a group from an invitation? Open the link you were sent; you can join as a guest without an email.
+            </p>
+          </>
+        )}
       </main>
     </div>
   );

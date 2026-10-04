@@ -2071,3 +2071,63 @@
 .correction-row {
   align-items: center;
 }
+
+/* Sign-in link confirmed: the split coin snaps back together, with a green check. */
+.confirm-hero {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  padding: 28px 0;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 55%, var(--surface) 0 46px, transparent 47px),
+    var(--green-soft);
+}
+.confirm-coin {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+}
+.confirm-badge {
+  position: absolute;
+  right: 4px;
+  bottom: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--green);
+  color: var(--bg);
+  border: 3px solid var(--green-soft);
+  animation: confirm-pop 0.35s 0.45s ease-out both;
+}
+.confirm-pill {
+  align-self: flex-start;
+}
+/* Animations override the inline translateY on the right half. */
+.logo-mark-joined .logo-half-r {
+  animation: coin-join 0.5s 0.1s cubic-bezier(0.3, 1.4, 0.5, 1) forwards;
+}
+@keyframes coin-join {
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes confirm-pop {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-mark-joined .logo-half-r,
+  .confirm-badge {
+    animation-duration: 1ms;
+    animation-delay: 0s;
+  }
+}

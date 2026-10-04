@@ -4,7 +4,7 @@ import { useApi, useSession } from "../api/context";
 import { ApiError, errorMessage } from "../api/errors";
 import { useSubmit } from "../api/idempotency";
 import { useTitle } from "../components/Shell";
-import { Icon, Logo } from "../components/ui";
+import { Icon, Logo, LogoMark } from "../components/ui";
 
 /**
  * /auth/confirm#token=…: the link from the sign-in email. The token sits in the fragment,
@@ -51,11 +51,20 @@ export function AuthConfirm() {
       <main id="main" className="narrow-main">
         {!error ? (
           <>
-            <span className="inbox-icon" aria-hidden="true">
-              <Icon name="mail" size={30} />
+            <div className="confirm-hero" aria-hidden="true">
+              <span className="confirm-coin">
+                <LogoMark size={56} className="logo-mark-joined" />
+                <span className="confirm-badge">
+                  <Icon name="check" size={20} />
+                </span>
+              </span>
+            </div>
+            <span className="pill pill-green confirm-pill">
+              <Icon name="verified_user" size={16} />
+              Link confirmed
             </span>
-            <h1 className="page-h1">Sign in to Splitdummy</h1>
-            <p className="muted lede">You opened your sign-in link. Continue to sign in on this device.</p>
+            <h1 className="page-h1">Welcome back</h1>
+            <p className="muted lede">Your link checks out. One tap and you're in on this device.</p>
             <button type="button" className="btn btn-primary btn-block" onClick={() => void signIn()} disabled={!ready || pending} autoFocus>
               {pending ? "Signing in…" : "Sign in to Splitdummy"}
             </button>
