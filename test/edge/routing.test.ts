@@ -28,7 +28,7 @@ const validEntry = {
 
 describe("project routing", () => {
   it("every ENDPOINTS entry is routed (edge-handled or DO-mapped)", () => {
-    const edgeHandled = ["config", "me", "signIn", "verify", "signOut", "attachEmail", "listProjects", "createProject", "previewInvite", "join", "live"];
+    const edgeHandled = ["config", "me", "signIn", "verify", "verifySignIn", "signOut", "attachEmail", "listProjects", "createProject", "previewInvite", "join", "live"];
     const mapped = Object.keys(PROJECT_ROUTES);
     expect([...edgeHandled, ...mapped].sort()).toEqual(Object.keys(ENDPOINTS).sort());
   });

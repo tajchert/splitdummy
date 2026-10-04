@@ -48,7 +48,8 @@ export type ApiErrorCode =
   | "RATE_LIMITED"
   | "TURNSTILE_FAILED"
   | "LIMIT_EXCEEDED"
-  | "INTERNAL";
+  | "INTERNAL"
+  | "SIGNIN_LINK_INVALID";
 
 export interface ApiErrorBody {
   error: {
@@ -68,10 +69,20 @@ export interface ConfigDTO {
   environment: "production" | "staging" | "development" | "test";
 }
 
-/** POST /api/auth/email response. devLink is ONLY returned outside production for local testing. */
+/** POST /api/auth/email response. devLink is ONLY returned in development/test (never staging/production). */
 export interface SignInRequestedDTO {
   sent: true;
+  /** `${origin}/auth/confirm#token=…` — same link the email contains. */
   devLink?: string;
+}
+
+/**
+ * POST /api/auth/verify response: session cookie is set; navigate to `next` (relative path).
+ * When attaching an email that already belongs to another account, the session is unchanged and
+ * `next` carries `?error=email_in_use`.
+ */
+export interface SignInVerifiedDTO {
+  next: string;
 }
 
 export interface MeDTO {
@@ -301,6 +312,11 @@ export const RequestSignInSchema = z.object({
   next: z.string().regex(/^\/[^/]/).max(200).optional(),
 });
 
+/** POST /api/auth/verify body; the token comes from the /auth/confirm#token=… fragment. */
+export const VerifySignInSchema = z.object({
+  token: z.string().min(1).max(200),
+});
+
 export const AttachEmailSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   turnstileToken: z.string().max(4096).optional(),
@@ -395,7 +411,8 @@ export const ENDPOINTS = {
   config: "GET /api/config", // -> ConfigDTO (public)
   me: "GET /api/me", // -> MeDTO | 401
   signIn: "POST /api/auth/email",
-  verify: "GET /api/auth/verify?token=", // redirects to `next` after setting cookie
+  verify: "GET /api/auth/verify?token=", // legacy links: 303 → /auth/confirm#token=… (consumes nothing)
+  verifySignIn: "POST /api/auth/verify", // { token } -> SignInVerifiedDTO + session cookie; 410 SIGNIN_LINK_INVALID
   signOut: "POST /api/auth/logout",
   attachEmail: "POST /api/me/email",
   listProjects: "GET /api/projects",

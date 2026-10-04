@@ -16,6 +16,7 @@ export interface CallInit {
   idempotencyKey?: string | null;
   headers?: Record<string, string>;
   base?: string;
+  env?: Env;
 }
 
 /** Calls the Worker's fetch in-process with sensible same-origin defaults. */
@@ -34,7 +35,7 @@ export async function call(path: string, init: CallInit = {}): Promise<Response>
     headers.set("content-type", "application/json");
   }
   const ctx = createExecutionContext();
-  const res = await worker.fetch(new Request(`${init.base ?? ORIGIN}${path}`, { method, headers, body }), testEnv, ctx);
+  const res = await worker.fetch(new Request(`${init.base ?? ORIGIN}${path}`, { method, headers, body }), init.env ?? testEnv, ctx);
   await waitOnExecutionContext(ctx);
   return res;
 }
@@ -55,10 +56,20 @@ export async function signIn(email: string, cookie?: string | null): Promise<str
   const res = await call("/api/auth/email", { body: { email, turnstileToken: "ok" }, cookie });
   if (res.status !== 200) throw new Error(`sign-in request failed: ${res.status} ${await res.text()}`);
   const { devLink } = await res.json<{ devLink: string }>();
-  const verify = await call(new URL(devLink).pathname + new URL(devLink).search, { cookie });
+  const verify = await verifyToken(tokenFromLink(devLink), { cookie });
   const sc = sessionCookie(verify);
-  if (!sc) throw new Error(`verify failed: ${verify.status} ${verify.headers.get("location")}`);
+  if (!sc) throw new Error(`verify failed: ${verify.status} ${await verify.text()}`);
   return sc;
+}
+
+/** Token from a `/auth/confirm#token=…` link. */
+export function tokenFromLink(link: string): string {
+  return new URLSearchParams(new URL(link).hash.slice(1)).get("token") ?? "";
+}
+
+/** What the SPA confirm page does: POST the fragment token. */
+export function verifyToken(token: string, init: Omit<CallInit, "body"> = {}): Promise<Response> {
+  return call("/api/auth/verify", { ...init, body: { token } });
 }
 
 export function uniqueEmail(tag = "user"): string {
@@ -76,14 +87,14 @@ export function mockProjectDO(impl: (req: DoRequest) => DoResponse | Promise<DoR
 }
 
 /** Turnstile siteverify stub: token "fail" fails, anything else passes. */
-export function mockTurnstile() {
+export function mockTurnstile(hostname = "example.com") {
   const original = globalThis.fetch;
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     if (url.startsWith("https://challenges.cloudflare.com/turnstile/v0/siteverify")) {
       const form = init?.body as FormData;
       const ok = form.get("response") !== "fail";
-      return Response.json(ok ? { success: true, hostname: "example.com" } : { success: false, "error-codes": ["invalid-input-response"] });
+      return Response.json(ok ? { success: true, hostname } : { success: false, "error-codes": ["invalid-input-response"] });
     }
     return original(input, init);
   });
