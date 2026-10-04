@@ -1011,7 +1011,8 @@ button.row:hover {
   .sheet {
     margin: auto;
     width: min(640px, calc(100vw - 48px));
-    height: auto;
+    /* A modal <dialog> is pinned to both viewport edges, so height:auto would stretch it. */
+    height: fit-content;
     max-height: calc(100dvh - 64px);
     border-radius: 24px;
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
@@ -1021,7 +1022,6 @@ button.row:hover {
   }
   .sheet-sm {
     width: min(560px, calc(100vw - 48px));
-    height: fit-content;
   }
   .sheet-panel {
     max-height: calc(100dvh - 64px);
