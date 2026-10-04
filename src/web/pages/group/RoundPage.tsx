@@ -64,7 +64,12 @@ export function RoundPage() {
       </div>
       <div className="meta">
         <Meta icon="calendar_today">Started {fmtDate(r.createdAt)}</Meta>
-        {r.frozenAt && <Meta icon="lock">Frozen {fmtDateTime(r.frozenAt)}{r.frozenByMemberId ? ` by ${nameOf(view, r.frozenByMemberId)}` : ""}</Meta>}
+        {r.frozenAt && (
+          <Meta icon="lock">
+            Frozen {fmtDateTime(r.frozenAt)}
+            {r.frozenBySchedule ? " automatically" : r.frozenByMemberId ? ` by ${nameOf(view, r.frozenByMemberId)}` : ""}
+          </Meta>
+        )}
         {r.settledAt && <Meta icon="sports_score">Settled {fmtDate(r.settledAt)}</Meta>}
       </div>
       {r.id !== view.current.round.id && (

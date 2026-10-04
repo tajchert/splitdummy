@@ -15,6 +15,7 @@ import { currencyName, decimalSeparator, fmtDate, fmtDateTime, fmtRate } from ".
 import { rateErrorText } from "../../lib/entryForm";
 import { activeMembers, nameOf, toneFor } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
+import { FreezeDateForm, freezeScheduleSentence } from "./FreezeDate";
 import { groupBase } from "./parts";
 
 export function Settings() {
@@ -41,6 +42,7 @@ export function Settings() {
       <PendingOwnership view={view} />
       <YourName view={view} />
       <GroupName view={view} />
+      <FreezeDateSettings view={view} />
       <CurrencySettings view={view} />
       {(view.project.multiCurrencyEnabled || view.rates.length > 0) && <RateDefaults view={view} />}
       {owner && <Invitations view={view} />}
@@ -141,6 +143,24 @@ function GroupName({ view }: { view: ProjectViewDTO }) {
         </button>
       </div>
     </form>
+  );
+}
+
+function FreezeDateSettings({ view }: { view: ProjectViewDTO }) {
+  const round = view.current.round;
+  if (round.status !== "COLLECTING") return null;
+  if (!view.me.isOwner && !round.scheduledFreezeDate) return null;
+  return (
+    <section className="card" id="freeze-date-card" aria-labelledby="s-freeze">
+      <h2 id="s-freeze" className="card-title">
+        Freeze date
+      </h2>
+      {view.me.isOwner ? (
+        <FreezeDateForm key={round.scheduledFreezeDate ?? "none"} view={view} />
+      ) : (
+        <p className="small">{freezeScheduleSentence(round)}</p>
+      )}
+    </section>
   );
 }
 

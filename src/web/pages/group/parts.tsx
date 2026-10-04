@@ -8,7 +8,7 @@ import { ConfirmDialog } from "../../components/Dialog";
 import { BackButton } from "../../components/Shell";
 import { useToast } from "../../components/Toast";
 import { Amount, Avatar, Banner, FinishTrack, Icon, Meta, StatusPill } from "../../components/ui";
-import { fmtDateTime, fmtDay, fmtMoney, fmtNumber, fmtRate, fmtShortDate } from "../../lib/format";
+import { fmtDateTime, fmtDay, fmtMoney, fmtNumber, fmtRate, fmtShortDate, fmtWeekday } from "../../lib/format";
 import {
   activeMembers,
   balanceOf,
@@ -85,7 +85,7 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
                     <span className="mobile-only-inline">{fmtDateTime(r.frozenAt, true)}</span>
                     <span className="desktop-only-inline">
                       {fmtDateTime(r.frozenAt)}
-                      {r.frozenByMemberId ? ` · ${nameOf(view, r.frozenByMemberId)}` : ""}
+                      {r.frozenBySchedule ? " · automatically" : r.frozenByMemberId ? ` · ${nameOf(view, r.frozenByMemberId)}` : ""}
                     </span>
                   </Meta>
                 )}
@@ -116,8 +116,19 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
 export function FreezeNote({ view, round }: { view: ProjectViewDTO; round: RoundViewDTO }) {
   const r = round.round;
   const notReady = notReadyAtFreeze(view, round);
-  if (!notReady.length && !r.earlyFreezeReason) return null;
   const names = notReady.map((m) => nameOf(view, m.id, { short: true })).join(", ");
+  if (r.frozenBySchedule) {
+    return (
+      <Banner tone="neutral" icon="event_available">
+        Frozen automatically on the scheduled date
+        <p>
+          {r.scheduledFreezeDate ? `The list froze at the end of ${fmtWeekday(r.scheduledFreezeDate)}. ` : ""}
+          {names ? `${names} hadn't finished adding by then.` : "Everyone had finished adding."}
+        </p>
+      </Banner>
+    );
+  }
+  if (!notReady.length && !r.earlyFreezeReason) return null;
   return (
     <Banner tone="neutral" icon="info">
       {names ? `Frozen before ${names} finished` : "Frozen before everyone finished"}

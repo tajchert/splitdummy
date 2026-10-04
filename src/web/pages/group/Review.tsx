@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { ReviewDTO } from "@shared/api";
 import { useApi } from "../../api/context";
 import { ApiError, errorMessage } from "../../api/errors";
@@ -12,6 +12,7 @@ import { fmtMoney, plural } from "../../lib/format";
 import { activeMembers, nameOf, roundLabel } from "../../lib/project";
 import { describeChange } from "../../lib/reviewDiff";
 import { useProject, useView } from "../../state/project";
+import { freezeDayLabel, zoneNote } from "./FreezeDate";
 import { groupBase } from "./parts";
 
 export function Review() {
@@ -182,6 +183,20 @@ export function Review() {
         {error && (
           <Banner tone="red" icon="error" role="alert">
             {error}
+          </Banner>
+        )}
+        {round.scheduledFreezeDate && (
+          <Banner
+            tone="blue"
+            icon="event"
+            action={
+              <Link to={`${base}/settings#freeze-date-card`} className="btn btn-sm btn-ink">
+                Change
+              </Link>
+            }
+          >
+            Scheduled freeze: {freezeDayLabel(round)}
+            <p>The list freezes automatically at the end of that day{zoneNote(round)} unless you freeze it sooner.</p>
           </Banner>
         )}
 

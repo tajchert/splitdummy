@@ -7,7 +7,7 @@ import { useSubmit } from "../../api/idempotency";
 import { BottomBar } from "../../components/Shell";
 import { useToast } from "../../components/Toast";
 import { Amount, Banner, EmptyState, Icon } from "../../components/ui";
-import { fmtDate, fmtDateTime, fmtMoney, plural } from "../../lib/format";
+import { fmtDate, fmtDateTime, fmtMoney, fmtWeekday, plural } from "../../lib/format";
 import { activeMembers, balanceOf, confirmedCount, nameOf, readinessOf, roundLabel } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
 import {
@@ -23,6 +23,7 @@ import {
   TaskCards,
   TransferCard,
 } from "./parts";
+import { FreezeDateNotice } from "./FreezeDate";
 import { RoundsSwitcher } from "./RoundsSwitcher";
 import { readyChangedBySelfRecently } from "./selfChange";
 
@@ -108,6 +109,7 @@ function Collecting({ view }: { view: ProjectViewDTO }) {
             <p>Create an invitation link and send it to everyone who shares the costs.</p>
           </Banner>
         )}
+        <FreezeDateNotice view={view} />
 
         <div className="group-cols">
           <aside className="group-side">
@@ -356,6 +358,12 @@ function Settled({ view }: { view: ProjectViewDTO }) {
               {view.project.name} · {roundLabel(r.sequence)}
               {r.settledAt ? ` · Completed ${fmtDate(r.settledAt)}` : ""}
             </p>
+            {r.frozenBySchedule && (
+              <p className="small muted meta-item">
+                <Icon name="event_available" size={16} />
+                Frozen automatically on the scheduled date{r.scheduledFreezeDate ? ` (${fmtWeekday(r.scheduledFreezeDate)})` : ""}
+              </p>
+            )}
             <div className="settled-stats">
               <div className="stat">
                 <span className="tiny muted">Spent together</span>
