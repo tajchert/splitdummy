@@ -262,7 +262,7 @@ export function Review() {
               <h2 id="rv-plan" className="card-title">
                 Who will pay whom<span className="mobile-only-inline"> (preview)</span>
               </h2>
-              <span className="tiny muted meta-item desktop-only-inline">
+              <span className="tiny muted meta-item plan-preview desktop-only-inline">
                 <Icon name="visibility" size={15} />
                 Preview
               </span>

@@ -227,7 +227,7 @@ export function BalanceCard({ view, compactTotals }: { view: ProjectViewDTO; com
           <Icon name="lock_open" size={14} />
           Can still change
         </span>
-        <Link to={`${base}/balance`} className="icon-btn desktop-only-grid" aria-label="How your balance is calculated">
+        <Link to={`${base}/balance`} className="icon-btn" aria-label="How your balance is calculated">
           <Icon name="help" size={19} />
         </Link>
       </div>
@@ -238,9 +238,7 @@ export function BalanceCard({ view, compactTotals }: { view: ProjectViewDTO; com
             <span className="sr-only">Group total </span>
             <b className="ink amount">{fmtMoney(round.totals.expenses, code, exp)}</b>
           </span>
-          <Link to={`${base}/balance`} className="icon-btn" aria-label="How your balance is calculated">
-            <Icon name="help" size={19} />
-          </Link>
+          <span className="tiny muted">spent by the group</span>
         </div>
       )}
     </section>
