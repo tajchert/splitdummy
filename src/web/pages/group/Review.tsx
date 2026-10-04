@@ -102,7 +102,9 @@ export function Review() {
   const notReady = review.notReadyMemberIds;
   const notReadyNames = notReady.map((id) => nameOf(view, id)).join(", ");
   const needsAck = notReady.length > 0;
-  const canFreeze = !needsAck || (ack && reason.trim().length > 0);
+  // The acknowledgement is required; the reason is optional.
+  const canFreeze = !needsAck || ack;
+  const reasonText = reason.trim();
   const readyCount = members.length - notReady.filter((id) => members.some((m) => m.id === id)).length;
 
   const doFreeze = async () => {
@@ -110,7 +112,7 @@ export function Review() {
     const body = {
       expectedReviewVersion: review.reviewVersion,
       acknowledgeNotReady: needsAck ? notReady : [],
-      ...(needsAck ? { earlyFreezeReason: reason.trim() } : {}),
+      ...(needsAck && reasonText ? { earlyFreezeReason: reasonText } : {}),
     };
     freezing.current = true;
     try {
@@ -142,7 +144,7 @@ export function Review() {
       </label>
       <div className="field">
         <label htmlFor="freeze-reason" className="field-label">
-          Reason (shown to the group)
+          Reason (optional)
         </label>
         <textarea
           id="freeze-reason"
@@ -150,9 +152,13 @@ export function Review() {
           maxLength={280}
           rows={2}
           value={reason}
+          aria-describedby="freeze-reason-hint"
           onChange={(e) => setReason(e.target.value)}
           placeholder={`For example: ${nameOf(view, notReady[0])} confirmed in chat there's nothing else to add.`}
         />
+        <span id="freeze-reason-hint" className="field-hint">
+          Shown to the whole group if you add one.
+        </span>
       </div>
       <FreezeNotes />
       <FreezeButton disabled={!canFreeze} onClick={() => setConfirming(true)} className="desktop-only-flex" />
@@ -311,7 +317,14 @@ export function Review() {
           <p>
             Entries and members lock, and {review.proposedTransfers.length ? `${plural(review.proposedTransfers.length, "repayment", "repayments")} become fixed` : "the round settles right away"}. This can't be undone.
           </p>
-          {needsAck && <p>{notReadyNames} will see your reason: “{reason.trim()}”</p>}
+          {needsAck &&
+            (reasonText ? (
+              <p>
+                {notReadyNames} will see your reason: “{reasonText}”
+              </p>
+            ) : (
+              <p>Everyone will see that you froze before {notReadyNames} finished.</p>
+            ))}
         </ConfirmDialog>
       )}
     </>

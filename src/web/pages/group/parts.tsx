@@ -7,13 +7,14 @@ import { useSubmit } from "../../api/idempotency";
 import { ConfirmDialog } from "../../components/Dialog";
 import { BackButton } from "../../components/Shell";
 import { useToast } from "../../components/Toast";
-import { Amount, Avatar, FinishTrack, Icon, Meta, StatusPill } from "../../components/ui";
+import { Amount, Avatar, Banner, FinishTrack, Icon, Meta, StatusPill } from "../../components/ui";
 import { fmtDateTime, fmtDay, fmtMoney, fmtNumber, fmtRate, fmtShortDate } from "../../lib/format";
 import {
   activeMembers,
   balanceOf,
   confirmedCount,
   nameOf,
+  notReadyAtFreeze,
   readinessOf,
   roundLabel,
   toneFor,
@@ -34,7 +35,7 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
   const r = round.round;
   const base = groupBase(view.project.id);
   const isOwner = view.me.isOwner;
-  const notReadyAtFreeze = r.earlyFreezeReason ? view.members.filter((m) => !readinessOf(round, m.id) && m.status === "ACTIVE") : [];
+  const notReady = notReadyAtFreeze(view, round);
   return (
     <div className="ghead">
       <div className="ghead-top-m">
@@ -93,10 +94,10 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
                     {confirmedCount(round)} of {round.instructions.length} confirmed
                   </Meta>
                 </span>
-                {notReadyAtFreeze.length > 0 && (
+                {notReady.length > 0 && (
                   <span className="desktop-only-inline">
                     <Meta icon="error">
-                      {notReadyAtFreeze.map((m) => m.displayName).join(", ")} not finished
+                      {notReady.map((m) => m.displayName).join(", ")} not finished
                     </Meta>
                   </span>
                 )}
@@ -108,6 +109,20 @@ export function GroupHeader({ view, actions }: { view: ProjectViewDTO; actions?:
       </div>
       <FinishTrack progress={trackProgress(round)} size="lg" label={trackLabel(round)} />
     </div>
+  );
+}
+
+/** Explains an early freeze: who hadn't finished and the owner's reason, if they gave one. */
+export function FreezeNote({ view, round }: { view: ProjectViewDTO; round: RoundViewDTO }) {
+  const r = round.round;
+  const notReady = notReadyAtFreeze(view, round);
+  if (!notReady.length && !r.earlyFreezeReason) return null;
+  const names = notReady.map((m) => nameOf(view, m.id, { short: true })).join(", ");
+  return (
+    <Banner tone="neutral" icon="info">
+      {names ? `Frozen before ${names} finished` : "Frozen before everyone finished"}
+      <p>{r.earlyFreezeReason ? `${nameOf(view, r.frozenByMemberId)}: “${r.earlyFreezeReason}”` : `${nameOf(view, r.frozenByMemberId)} froze the list without giving a reason.`}</p>
+    </Banner>
   );
 }
 

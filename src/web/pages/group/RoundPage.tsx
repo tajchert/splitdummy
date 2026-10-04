@@ -10,7 +10,7 @@ import { nameOf, roundLabel } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
 import type { RoundOutletContext } from "./EntryDetail";
 import { RoundEntries } from "./EntriesPage";
-import { groupBase, TransferCard } from "./parts";
+import { FreezeNote, groupBase, TransferCard } from "./parts";
 
 export function RoundPage() {
   const view = useView();
@@ -72,12 +72,7 @@ export function RoundPage() {
           <p>Nothing here changes. Corrections go into the current round as adjustments.</p>
         </Banner>
       )}
-      {r.earlyFreezeReason && (
-        <Banner tone="neutral" icon="info">
-          Frozen before everyone finished
-          <p>“{r.earlyFreezeReason}”</p>
-        </Banner>
-      )}
+      <FreezeNote view={view} round={round} />
 
       <section className="stack-12" aria-labelledby="r-entries">
         <h2 id="r-entries" className="section-title">

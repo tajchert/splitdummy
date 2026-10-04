@@ -41,6 +41,19 @@ export function readinessOf(round: RoundViewDTO, memberId: string): boolean {
   return round.readiness.find((r) => r.memberId === memberId)?.ready ?? false;
 }
 
+/**
+ * Members who hadn't marked "done adding" when the round froze. Readiness rows of a frozen
+ * round are the ones recorded at freeze; people who joined later never count.
+ */
+export function notReadyAtFreeze(view: Pick<ProjectViewDTO, "members">, round: RoundViewDTO): MemberDTO[] {
+  const frozenAt = round.round.frozenAt;
+  if (round.round.status === "COLLECTING" || !frozenAt) return [];
+  return round.readiness
+    .filter((r) => !r.ready)
+    .map((r) => member(view, r.memberId))
+    .filter((m): m is MemberDTO => !!m && m.joinedAt <= frozenAt);
+}
+
 export function balanceOf(round: RoundViewDTO, memberId: string) {
   return round.balances.find((b) => b.memberId === memberId);
 }

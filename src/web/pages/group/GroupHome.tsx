@@ -14,6 +14,7 @@ import {
   BalanceCard,
   CurrencySubtotals,
   EntryRow,
+  FreezeNote,
   GroupHeader,
   groupBase,
   ReadinessCard,
@@ -217,14 +218,7 @@ function Settling({ view }: { view: ProjectViewDTO }) {
           </div>
         }
       />
-      {round.round.earlyFreezeReason && (
-        <Banner tone="neutral" icon="info">
-          Frozen before everyone finished
-          <p>
-            {nameOf(view, round.round.frozenByMemberId)}: “{round.round.earlyFreezeReason}”
-          </p>
-        </Banner>
-      )}
+      <FreezeNote view={view} round={round} />
       {disputes > 0 && (
         <Banner tone="red" icon="report" role="status">
           {plural(disputes, "transfer is", "transfers are")} disputed
