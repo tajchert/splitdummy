@@ -23,7 +23,7 @@ export type ParseResult<T, E extends string> = { ok: true; value: T } | { ok: fa
  *
  * Detailed rules (symmetric for "," as decimal mark):
  * - Surrounding whitespace is ignored. Grouping uses ONE kind of character: the
- *   opposite separator, space, NBSP, narrow NBSP, thin space, ' or ’; groups must
+ *   opposite separator, space, NBSP, narrow NBSP, thin space, ' or U+2019; groups must
  *   follow a strict 3-digit (or Indian 2+3) layout and cannot start with 0.
  *   So with ".": "1,234" → 1234, "1 234.5" → 1234.50, "12,34,567" → 1234567.
  * - Input that only makes sense under the other decimal convention is

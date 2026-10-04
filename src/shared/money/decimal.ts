@@ -62,7 +62,7 @@ export type DecimalParseError = "EMPTY" | "MALFORMED" | "AMBIGUOUS_SEPARATOR";
  * Grouping characters accepted besides the opposite separator: space, NBSP,
  * narrow NBSP (fr), thin space, ASCII apostrophe (de-CH) and right single quote.
  */
-const EXTRA_GROUP_CHARS = new Set([" ", " ", " ", " ", "'", "’"]);
+const EXTRA_GROUP_CHARS = new Set([" ", "\u00A0", "\u202F", "\u2009", "'", "\u2019"]);
 
 function escapeRegExp(ch: string): string {
   return ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -119,7 +119,7 @@ export function parseDecimalInput(
   if (s === "") return { ok: false, error: "EMPTY" };
   let negative = false;
   let body = s;
-  if (body.startsWith("-") || body.startsWith("−")) {
+  if (body.startsWith("-") || body.startsWith("\u2212")) {
     negative = true;
     body = body.slice(1);
   }
