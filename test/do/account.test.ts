@@ -67,7 +67,7 @@ describe("rename self", () => {
   it("works in any round state, including settlement, without touching money", async () => {
     const g = await createGroup();
     await ownerPaysForAll(g);
-    const frozen = await freezeNow(g);
+    const frozen: FreezeResultDTO = await freezeNow(g);
     const bob = g.members[0]!;
     await bob.ok("renameMe", {}, { displayName: "Robert" });
     const round = await g.owner.ok<RoundViewDTO>("getRound", { roundId: g.roundId }, null, null);
@@ -89,7 +89,7 @@ describe("account deletion ops", () => {
     expect((await errorCode(info(empty))).status).toBe(404);
 
     await ownerPaysForAll(g);
-    const frozen = await freezeNow(g);
+    const frozen: FreezeResultDTO = await freezeNow(g);
     expect((await info(bob)).body).toMatchObject({ role: "MEMBER", hasOpenTransfers: true });
     expect((await info(g.owner)).body).toMatchObject({ role: "OWNER", hasOpenTransfers: true });
     // Sent but not yet confirmed still blocks.
@@ -105,7 +105,7 @@ describe("account deletion ops", () => {
     const [bob, carol] = g.members as [Client, Client];
     await ownerPaysForAll(g);
     await bob.ok("createEntry", { roundId: g.roundId }, expense(bob.memberId, [bob.memberId, carol.memberId], "500"));
-    const frozen = await freezeNow(g);
+    const frozen: FreezeResultDTO = await freezeNow(g);
     expect(await errorCode(anonymize(bob))).toMatchObject({
       status: 409,
       code: "ACCOUNT_HAS_OPEN_TRANSFERS",
