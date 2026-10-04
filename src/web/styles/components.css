@@ -297,6 +297,11 @@
 .pill-sm {
   padding: 3px 9px;
 }
+.pill-xs {
+  padding: 2px 8px;
+  font-size: 11px;
+  gap: 5px;
+}
 
 .tag {
   font-size: 10px;
@@ -314,6 +319,10 @@
 .tag-adjust {
   background: var(--blue-soft);
   color: var(--blue);
+}
+.tag-current {
+  background: var(--ink);
+  color: var(--bg);
 }
 .tag-outline {
   display: inline-flex;

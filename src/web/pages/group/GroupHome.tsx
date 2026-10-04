@@ -23,6 +23,7 @@ import {
   TaskCards,
   TransferCard,
 } from "./parts";
+import { RoundsSwitcher } from "./RoundsSwitcher";
 import { readyChangedBySelfRecently } from "./selfChange";
 
 export function GroupHome() {
@@ -112,6 +113,7 @@ function Collecting({ view }: { view: ProjectViewDTO }) {
           <aside className="group-side">
             <BalanceCard view={view} />
             <ReadinessCard view={view} />
+            <RoundsSwitcher view={view} />
           </aside>
 
           <section className="group-list" aria-labelledby="entries-h">
@@ -241,6 +243,7 @@ function Settling({ view }: { view: ProjectViewDTO }) {
               <Icon name="chevron_right" size={18} />
             </span>
           </Link>
+          <RoundsSwitcher view={view} />
         </aside>
         <section className="group-list" aria-labelledby="transfers-h">
           <div className="section-head mobile-only-flex">
@@ -433,6 +436,7 @@ function Settled({ view }: { view: ProjectViewDTO }) {
                 <p className="small muted">Ask {nameOf(view, view.project.ownerMemberId)} (the owner) to start the next round, then add it there.</p>
               )}
             </div>
+            <RoundsSwitcher view={view} />
           </div>
         </div>
       </main>

@@ -63,10 +63,10 @@ const STATUS: Record<RoundStatus | "DISPUTED", { label: string; cls: string }> =
   DISPUTED: { label: "Disputed", cls: "pill-red pill-square" },
 };
 
-export function StatusPill({ status }: { status: RoundStatus | "DISPUTED" }) {
+export function StatusPill({ status, small }: { status: RoundStatus | "DISPUTED"; small?: boolean }) {
   const s = STATUS[status];
   return (
-    <span className={`pill ${s.cls}`}>
+    <span className={`pill ${s.cls}${small ? " pill-xs" : ""}`}>
       <span className="pill-dot" aria-hidden="true" />
       {s.label}
     </span>

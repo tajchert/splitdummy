@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Outlet, useParams } from "react-router";
+import { Link, Outlet, useParams } from "react-router";
 import type { RoundViewDTO } from "@shared/api";
 import { useApi } from "../../api/context";
 import { errorMessage } from "../../api/errors";
@@ -11,6 +11,7 @@ import { useProject, useView } from "../../state/project";
 import type { RoundOutletContext } from "./EntryDetail";
 import { RoundEntries } from "./EntriesPage";
 import { FreezeNote, groupBase, TransferCard } from "./parts";
+import { RoundsSwitcher } from "./RoundsSwitcher";
 
 export function RoundPage() {
   const view = useView();
@@ -55,7 +56,7 @@ export function RoundPage() {
   return (
     <main id="main" className="page page-mid">
       <div className="page-top">
-        <BackButton to={`${base}/history`} label="Back to history" />
+        <BackButton to={base} label="Back to the current round" />
       </div>
       <div className="ghead-title-row">
         <h1 className="page-h1">{roundLabel(r.sequence)}</h1>
@@ -67,11 +68,20 @@ export function RoundPage() {
         {r.settledAt && <Meta icon="sports_score">Settled {fmtDate(r.settledAt)}</Meta>}
       </div>
       {r.id !== view.current.round.id && (
-        <Banner tone="neutral" icon="history">
+        <Banner
+          tone="neutral"
+          icon="history"
+          action={
+            <Link to={base} className="btn btn-sm btn-ink">
+              Current round
+            </Link>
+          }
+        >
           A previous round, shown read-only
           <p>Nothing here changes. Corrections go into the current round as adjustments.</p>
         </Banner>
       )}
+      <RoundsSwitcher view={view} viewingId={r.id} chipsOnly />
       <FreezeNote view={view} round={round} />
 
       <section className="stack-12" aria-labelledby="r-entries">
