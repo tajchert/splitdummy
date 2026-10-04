@@ -3,6 +3,7 @@ import {
   CreateProjectSchema,
   DisplayNameSchema,
   PutRateSchema,
+  RenameMemberSchema,
   TransferOwnershipSchema,
   UpdateSettingsSchema,
   type InvitationPreviewDTO,
@@ -392,6 +393,21 @@ export function leave(tx: Tx): DoResponse {
     tx.clearReadiness("ALL");
   }
   return ok(memberDto(tx.store.member(me.id)!, tx.project, tx.store.isReferenced(me.id)));
+}
+
+/** Own display name in this group. Identity, not money: allowed in any round state; names may repeat. */
+export function renameMe(tx: Tx, req: DoRequest): OpResult {
+  const me = tx.member();
+  const body = parseBody(RenameMemberSchema, req.body);
+  if (body.displayName !== me.display_name) {
+    tx.store.run("UPDATE members SET display_name = ? WHERE id = ?", body.displayName, me.id);
+    tx.audit("MEMBER_RENAMED", `${me.display_name} renamed themselves to ${body.displayName}`, {
+      roundId: tx.activeRound()?.id ?? null,
+      entityId: me.id,
+      details: { from: me.display_name, to: body.displayName },
+    });
+  }
+  return () => ok(memberDto(tx.store.member(me.id)!, tx.project, tx.store.isReferenced(me.id)));
 }
 
 export function transferOwnership(tx: Tx, req: DoRequest): OpResult {

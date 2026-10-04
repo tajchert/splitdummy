@@ -25,6 +25,7 @@ export interface MemberRow {
   joined_at: string;
   status: MemberStatus;
   status_changed_at: string | null;
+  account_deleted: number;
 }
 
 export interface RoundRow {
@@ -38,6 +39,11 @@ export interface RoundRow {
   settled_at: string | null;
   early_freeze_reason: string | null;
   frozen_by_member_id: string | null;
+  scheduled_freeze_date: string | null;
+  scheduled_freeze_time_zone: string | null;
+  /** ISO instant (start of the day after scheduled_freeze_date in scheduled_freeze_time_zone). */
+  scheduled_freeze_at: string | null;
+  frozen_by_schedule: number;
 }
 
 export interface ReadinessRow {

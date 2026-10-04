@@ -1,10 +1,18 @@
 /** Freeze, settlement instructions and round succession. */
-import { FreezeSchema, InstructionActionSchema, type FreezeResultDTO, type InstructionResultDTO } from "@shared/api";
+import {
+  FreezeScheduleSchema,
+  FreezeSchema,
+  InstructionActionSchema,
+  type FreezeResultDTO,
+  type InstructionResultDTO,
+  type ReadinessDTO,
+} from "@shared/api";
 import { SETTLEMENT_ALGORITHM_VERSION, planSettlement } from "@shared/money";
-import { conflict, forbidden, limitExceeded, notFound, notSettling, parseBody } from "../errors";
+import { conflict, forbidden, invalid, limitExceeded, notFound, notSettling, parseBody } from "../errors";
 import { money } from "../format";
 import { LIMITS } from "../limits";
-import type { InstructionRow, RoundRow } from "../store";
+import type { InstructionRow, MemberRow, RoundRow } from "../store";
+import { canonicalTimeZone, isCalendarDate, localDate, nextDate, startOfDay } from "../tz";
 import { newId, type Tx } from "../tx";
 import type { DoRequest } from "../types";
 import {
@@ -35,8 +43,46 @@ export function freeze(tx: Tx, req: DoRequest): OpResult {
   if (!sameSet([...new Set(body.acknowledgeNotReady)], notReady)) {
     throw conflict("NOT_READY_UNACKNOWLEDGED", "Confirm that you're freezing before everyone is ready.", { notReady });
   }
+  // The reason is optional; acknowledging who isn't ready is what's required.
   const earlyFreezeReason = notReady.length > 0 ? body.earlyFreezeReason?.trim() || null : null;
+  freezeRound(tx, round, { owner, readiness, notReady, earlyFreezeReason, scheduled: false });
+  return () => {
+    const result: FreezeResultDTO = {
+      round: roundDto(tx.store.round(round.id)!),
+      instructions: tx.store.instructions(round.id).map(instructionDto),
+    };
+    return ok(result);
+  };
+}
 
+export const SCHEDULED_FREEZE_REASON = "Scheduled freeze date reached";
+
+/**
+ * Alarm path: freezes the active round when its scheduled instant has passed, exactly like an
+ * owner freeze on the owner's behalf. Returns the frozen round's ID, or null when nothing is due
+ * (already frozen, schedule cleared or moved), so a repeated alarm is a no-op.
+ */
+export function scheduledFreeze(tx: Tx, now: number): string | null {
+  const project = tx.store.project();
+  const round = project?.active_round_id ? tx.store.round(project.active_round_id) : undefined;
+  if (!project || !round || round.status !== "COLLECTING" || !round.scheduled_freeze_at) return null;
+  if (Date.parse(round.scheduled_freeze_at) > now) return null;
+  const owner = tx.store.member(project.owner_member_id);
+  if (!owner) return null;
+  const readiness = readinessList(tx.store, round.id);
+  const notReady = readiness.filter((r) => !r.ready).map((r) => r.memberId);
+  const earlyFreezeReason = notReady.length > 0 ? SCHEDULED_FREEZE_REASON : null;
+  freezeRound(tx, round, { owner, readiness, notReady, earlyFreezeReason, scheduled: true });
+  return round.id;
+}
+
+/** The one freeze transaction body shared by the owner's freeze and the scheduled freeze. */
+function freezeRound(
+  tx: Tx,
+  round: RoundRow,
+  opts: { owner: MemberRow; readiness: ReadinessDTO[]; notReady: string[]; earlyFreezeReason: string | null; scheduled: boolean },
+): void {
+  const { owner, readiness, notReady, earlyFreezeReason, scheduled } = opts;
   const project = tx.project;
   const members = tx.store.members();
   const entries = tx.store.roundEntries(round.id).map(entryDto);
@@ -99,17 +145,26 @@ export function freeze(tx: Tx, req: DoRequest): OpResult {
   );
 
   const settled = instructions.length === 0;
+  // A manual freeze drops any pending schedule; a scheduled one keeps it as the record of why.
   tx.store.run(
-    `UPDATE rounds SET status = ?, frozen_at = ?, frozen_by_member_id = ?, early_freeze_reason = ?, settled_at = ?
+    `UPDATE rounds SET status = ?, frozen_at = ?, frozen_by_member_id = ?, early_freeze_reason = ?, settled_at = ?,
+       frozen_by_schedule = ?, scheduled_freeze_date = ?, scheduled_freeze_time_zone = ?, scheduled_freeze_at = ?
      WHERE id = ?`,
     settled ? "SETTLED" : "SETTLING",
     tx.now,
     owner.id,
     earlyFreezeReason,
     settled ? tx.now : null,
+    scheduled ? 1 : 0,
+    scheduled ? round.scheduled_freeze_date : null,
+    scheduled ? round.scheduled_freeze_time_zone : null,
+    scheduled ? round.scheduled_freeze_at : null,
     round.id,
   );
-  tx.audit("ROUND_FROZEN", `${owner.display_name} froze expenses for round ${round.sequence}`, {
+  const summary = scheduled
+    ? `Expenses for round ${round.sequence} froze automatically on the scheduled date`
+    : `${owner.display_name} froze expenses for round ${round.sequence}`;
+  tx.audit("ROUND_FROZEN", summary, {
     roundId: round.id,
     entityId: round.id,
     details: {
@@ -119,6 +174,8 @@ export function freeze(tx: Tx, req: DoRequest): OpResult {
       earlyFreezeReason,
       algorithmVersion: SETTLEMENT_ALGORITHM_VERSION,
       instructionCount: instructions.length,
+      scheduled,
+      ...(scheduled ? { scheduledFreezeDate: round.scheduled_freeze_date, scheduledFreezeTimeZone: round.scheduled_freeze_time_zone } : {}),
     },
   });
   const everyone = members.filter((m) => m.status !== "REMOVED").map((m) => m.id);
@@ -131,13 +188,6 @@ export function freeze(tx: Tx, req: DoRequest): OpResult {
     });
     tx.notify("ROUND_SETTLED", everyone, `“${project.name}” is all settled.`);
   }
-  return () => {
-    const result: FreezeResultDTO = {
-      round: roundDto(tx.store.round(round.id)!),
-      instructions: tx.store.instructions(round.id).map(instructionDto),
-    };
-    return ok(result);
-  };
 }
 
 type Action = "SENT" | "CONFIRMED" | "DISPUTED";
@@ -279,6 +329,11 @@ export function startRound(tx: Tx): OpResult {
   if (tx.store.count("SELECT COUNT(*) AS n FROM rounds") >= LIMITS.rounds) {
     throw limitExceeded("This group has reached its round limit.");
   }
+  // Deleted accounts that stayed ACTIVE through a settlement don't carry into the new round.
+  tx.store.run(
+    "UPDATE members SET status = 'LEFT', status_changed_at = ? WHERE account_deleted = 1 AND status = 'ACTIVE'",
+    tx.now,
+  );
   const id = newId("r");
   const sequence = latest.sequence + 1;
   tx.store.run(
@@ -290,4 +345,57 @@ export function startRound(tx: Tx): OpResult {
   tx.store.run("UPDATE project SET active_round_id = ? WHERE id = ?", id, project.id);
   tx.audit("ROUND_STARTED", `${owner.display_name} started round ${sequence}`, { roundId: id, entityId: id });
   return () => ok(roundDto(tx.store.round(id)!), 201);
+}
+
+/**
+ * Owner schedules (or clears) an automatic freeze at the end of a calendar day in their zone.
+ * Not financial: review/ledger versions stay; the project version bumps and clients refetch.
+ */
+export function setFreezeSchedule(tx: Tx, req: DoRequest): OpResult {
+  const owner = tx.owner("Only the group owner can schedule the freeze.");
+  const round = tx.collectingRound(req.params.roundId);
+  const body = parseBody(FreezeScheduleSchema, req.body);
+  const timeZone = canonicalTimeZone(body.timeZone);
+  if (!timeZone) throw invalid("timeZone", "Choose a valid time zone");
+  const result = () => ok(roundDto(tx.store.round(round.id)!));
+
+  if (body.date === null) {
+    if (round.scheduled_freeze_at) {
+      tx.store.run(
+        "UPDATE rounds SET scheduled_freeze_date = NULL, scheduled_freeze_time_zone = NULL, scheduled_freeze_at = NULL WHERE id = ?",
+        round.id,
+      );
+      tx.audit("FREEZE_SCHEDULE_CLEARED", `${owner.display_name} cancelled the scheduled freeze`, {
+        roundId: round.id,
+        entityId: round.id,
+        details: { date: round.scheduled_freeze_date, timeZone: round.scheduled_freeze_time_zone },
+      });
+    }
+    return result;
+  }
+
+  if (!isCalendarDate(body.date)) throw invalid("date", "Invalid date");
+  if (body.date < localDate(Date.parse(tx.now), timeZone)) throw invalid("date", "Pick today or a later date");
+  const at = new Date(startOfDay(nextDate(body.date), timeZone)).toISOString();
+  if (round.scheduled_freeze_date === body.date && round.scheduled_freeze_time_zone === timeZone) return result;
+
+  tx.store.run(
+    "UPDATE rounds SET scheduled_freeze_date = ?, scheduled_freeze_time_zone = ?, scheduled_freeze_at = ? WHERE id = ?",
+    body.date,
+    timeZone,
+    at,
+    round.id,
+  );
+  tx.audit("FREEZE_SCHEDULED", `${owner.display_name} scheduled the freeze for the end of ${body.date}`, {
+    roundId: round.id,
+    entityId: round.id,
+    details: {
+      date: body.date,
+      timeZone,
+      at,
+      previousDate: round.scheduled_freeze_date,
+      previousTimeZone: round.scheduled_freeze_time_zone,
+    },
+  });
+  return result;
 }

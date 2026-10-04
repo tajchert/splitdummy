@@ -72,6 +72,7 @@ export function memberDto(m: MemberRow, p: ProjectRow, referenced: boolean): Mem
     joinedAt: m.joined_at,
     status: m.status,
     referenced,
+    accountDeleted: m.account_deleted === 1,
   };
 }
 
@@ -87,6 +88,10 @@ export function roundDto(r: RoundRow): RoundDTO {
     settledAt: r.settled_at,
     earlyFreezeReason: r.early_freeze_reason,
     frozenByMemberId: r.frozen_by_member_id,
+    scheduledFreezeDate: r.scheduled_freeze_date,
+    scheduledFreezeTimeZone: r.scheduled_freeze_time_zone,
+    scheduledFreezeAt: r.scheduled_freeze_at,
+    frozenBySchedule: r.frozen_by_schedule === 1,
   };
 }
 
@@ -254,12 +259,12 @@ export function snapshotBalances(balances: MemberBalance[]): SnapshotData["balan
   return balances.map(memberBalanceJson);
 }
 
-/** Members expected to mark readiness: currently ACTIVE members. */
+/** Members expected to mark readiness: currently ACTIVE members whose account still exists. */
 export function readinessList(store: Store, roundId: string): ReadinessDTO[] {
   const rows = new Map(store.readiness(roundId).map((r) => [r.member_id, r]));
   return store
     .members()
-    .filter((m) => m.status === "ACTIVE")
+    .filter((m) => m.status === "ACTIVE" && m.account_deleted !== 1)
     .map((m) => {
       const r = rows.get(m.id);
       return { memberId: m.id, ready: r?.ready === 1, markedAt: r?.marked_at ?? null };
