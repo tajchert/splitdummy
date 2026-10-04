@@ -33,6 +33,16 @@ app.route("/", liveRoutes);
 app.route("/", invitationRoutes);
 app.route("/", projectRoutes);
 
+// Hashed build files. A stale tab asking for a chunk from a previous deploy must get a 404 (the client
+// then reloads), not the SPA's index.html served as JavaScript.
+app.get("/assets/*", async (c) => {
+  const res = await c.env.ASSETS.fetch(c.req.raw);
+  if (res.status === 200 && (res.headers.get("Content-Type") ?? "").startsWith("text/html")) {
+    return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store", "Content-Type": "text/plain" } });
+  }
+  return res;
+});
+
 app.notFound((c) => c.json(new ApiError("NOT_FOUND", "Not found.").toBody(), 404));
 
 app.onError((err, c) => {

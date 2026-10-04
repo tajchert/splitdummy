@@ -4,12 +4,18 @@ import { createHttpApi } from "./api/http";
 import type { Api } from "./api/types";
 import { App } from "./App";
 import { applyStoredTheme } from "./lib/theme";
+import { reloadForNewBuild } from "./lib/lazyPage";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/components.css";
 import "./styles/pages.css";
 
 applyStoredTheme();
+
+// A stale tab after a deploy: Vite couldn't preload a chunk's dependencies. Reload once for the new build.
+window.addEventListener("vite:preloadError", (e) => {
+  if (reloadForNewBuild()) e.preventDefault();
+});
 
 async function chooseApi(): Promise<{ api: Api; devPanel?: ComponentType }> {
   // Statically false in normal builds, so the mock chunk is never emitted.

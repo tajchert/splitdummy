@@ -7,8 +7,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "assets": {
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    // /assets/* goes through the worker so a missing hashed chunk is a real 404, not index.html.
+    "run_worker_first": ["/api/*", "/assets/*"]
   },
   "routes": [
     { "pattern": "splitdummy.app", "custom_domain": true }

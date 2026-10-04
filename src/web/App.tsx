@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentType } from "react";
+import { Suspense, type ComponentType } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router";
 import { ApiProvider } from "./api/context";
 import type { Api } from "./api/types";
@@ -13,18 +13,20 @@ import { EntryDetail } from "./pages/group/EntryDetail";
 import { EntriesPage } from "./pages/group/EntriesPage";
 import { NotFound } from "./pages/NotFound";
 import { PageLoading, ScrollToTop } from "./components/Shell";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { lazyPage } from "./lib/lazyPage";
 
 // Less frequent screens load on demand.
-const Account = lazy(() => import("./pages/Account").then((m) => ({ default: m.Account })));
-const CreateGroup = lazy(() => import("./pages/CreateGroup").then((m) => ({ default: m.CreateGroup })));
-const Join = lazy(() => import("./pages/Join").then((m) => ({ default: m.Join })));
-const BalanceExplain = lazy(() => import("./pages/group/BalanceExplain").then((m) => ({ default: m.BalanceExplain })));
-const Review = lazy(() => import("./pages/group/Review").then((m) => ({ default: m.Review })));
-const History = lazy(() => import("./pages/group/History").then((m) => ({ default: m.History })));
-const RoundPage = lazy(() => import("./pages/group/RoundPage").then((m) => ({ default: m.RoundPage })));
-const Settings = lazy(() => import("./pages/group/Settings").then((m) => ({ default: m.Settings })));
-const Correction = lazy(() => import("./pages/group/Correction").then((m) => ({ default: m.Correction })));
-const AuthConfirm = lazy(() => import("./pages/AuthConfirm").then((m) => ({ default: m.AuthConfirm })));
+const Account = lazyPage(() => import("./pages/Account"), "Account");
+const CreateGroup = lazyPage(() => import("./pages/CreateGroup"), "CreateGroup");
+const Join = lazyPage(() => import("./pages/Join"), "Join");
+const BalanceExplain = lazyPage(() => import("./pages/group/BalanceExplain"), "BalanceExplain");
+const Review = lazyPage(() => import("./pages/group/Review"), "Review");
+const History = lazyPage(() => import("./pages/group/History"), "History");
+const RoundPage = lazyPage(() => import("./pages/group/RoundPage"), "RoundPage");
+const Settings = lazyPage(() => import("./pages/group/Settings"), "Settings");
+const Correction = lazyPage(() => import("./pages/group/Correction"), "Correction");
+const AuthConfirm = lazyPage(() => import("./pages/AuthConfirm"), "AuthConfirm");
 
 /** Notification emails link to /projects/:id; the app's group route is /g/:id. */
 function ProjectRedirect() {
@@ -78,7 +80,9 @@ export function App({ api, devPanel: DevPanel }: { api: Api; devPanel?: Componen
       <ToastProvider>
         <BrowserRouter>
           <ScrollToTop />
-          <AppRoutes />
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
           {DevPanel && <DevPanel />}
         </BrowserRouter>
       </ToastProvider>
