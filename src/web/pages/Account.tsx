@@ -1,14 +1,16 @@
-import { useState, type FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import { UpdateMeSchema } from "@shared/api";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import { UpdateMeSchema, type DeletionPreviewDTO } from "@shared/api";
 import { useApi, useSession } from "../api/context";
-import { errorMessage } from "../api/errors";
+import { ApiError, errorMessage } from "../api/errors";
 import { useSubmit } from "../api/idempotency";
 import { Field } from "../components/Field";
 import { AppBar, BackButton, RequireSession, useTitle } from "../components/Shell";
 import { useToast } from "../components/Toast";
 import { Turnstile } from "../components/Turnstile";
-import { Banner, Icon } from "../components/ui";
+import { Sheet } from "../components/Dialog";
+import { Banner, Icon, Loading } from "../components/ui";
+import { plural } from "../lib/format";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { useEmailLinkForm } from "./SignIn";
 
@@ -115,6 +117,8 @@ function AccountInner() {
         {me.kind === "GUEST" && !me.email && (
           <p className="tiny muted">As a guest, signing out means you can't get back into your groups from this browser without a new invitation.</p>
         )}
+
+        <DangerZone />
       </main>
     </>
   );
@@ -162,6 +166,166 @@ function AccountName() {
       </div>
       <p className="tiny muted">Filled in for you when you create a group. Each group keeps its own name, which you can change in that group's settings.</p>
     </form>
+  );
+}
+
+function DangerZone() {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="danger-zone" aria-labelledby="acc-delete">
+      <h2 id="acc-delete" className="card-title danger-text">
+        Delete account
+      </h2>
+      <p className="small muted">Groups you own are deleted for everyone. In groups you joined, your entries stay and your name becomes “Deleted account”.</p>
+      <button type="button" className="btn btn-md btn-danger-outline align-start" onClick={() => setOpen(true)}>
+        <Icon name="delete_forever" size={18} />
+        Delete account…
+      </button>
+      {open && <DeleteAccountDialog onClose={() => setOpen(false)} />}
+    </section>
+  );
+}
+
+export function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
+  const api = useApi();
+  const { setMe } = useSession();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const sub = useSubmit();
+  const [preview, setPreview] = useState<DeletionPreviewDTO | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [typed, setTyped] = useState("");
+
+  const load = useCallback(() => {
+    setLoadError(null);
+    api.getDeletionPreview().then(setPreview, (e) => setLoadError(errorMessage(e)));
+  }, [api]);
+  useEffect(load, [load]);
+
+  const blocked = !!preview && preview.blockingProjects.length > 0;
+  const canDelete = !!preview && !blocked && typed.trim() === "DELETE" && !sub.pending;
+
+  const confirmDelete = async () => {
+    if (!canDelete) return;
+    setError(null);
+    try {
+      await sub.run("delete-account", (k) => api.deleteAccount({ confirm: "DELETE" }, { idempotencyKey: k }));
+      setMe(null);
+      toast("Your account was deleted", "info");
+      navigate("/", { replace: true });
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "ACCOUNT_HAS_OPEN_TRANSFERS") load();
+      setError(errorMessage(e));
+    }
+  };
+
+  const groupLink = (g: { id: string; name: string }) => (
+    <Link to={`/g/${encodeURIComponent(g.id)}`} onClick={onClose}>
+      {g.name}
+    </Link>
+  );
+
+  return (
+    <Sheet
+      title="Delete your account?"
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost btn-md" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-danger btn-md" disabled={!canDelete} onClick={() => void confirmDelete()}>
+            <Icon name="delete_forever" size={18} />
+            {sub.pending ? "Deleting…" : "Delete account"}
+          </button>
+        </>
+      }
+    >
+      {loadError ? (
+        <Banner tone="red" icon="error" role="alert" action={<button type="button" className="btn btn-sm btn-ghost" onClick={load}>Try again</button>}>
+          {loadError}
+        </Banner>
+      ) : !preview ? (
+        <Loading label="Checking your groups" inline />
+      ) : (
+        <>
+          {blocked && (
+            <Banner tone="red" icon="warning" role="alert">
+              You can't delete your account yet
+              <p>
+                You still have transfers to send or confirm in {preview.blockingProjects.map((g, i) => (
+                  <span key={g.id}>
+                    {i > 0 && ", "}
+                    {groupLink(g)}
+                  </span>
+                ))}
+                . Once they're confirmed, you can delete your account.
+              </p>
+            </Banner>
+          )}
+          <section className="stack-8" aria-labelledby="del-owned">
+            <h3 id="del-owned" className="field-label">
+              Groups you own: deleted for everyone
+            </h3>
+            {preview.ownedProjects.length === 0 ? (
+              <p className="small muted">You don't own any groups.</p>
+            ) : (
+              <ul className="del-list">
+                {preview.ownedProjects.map((g) => (
+                  <li key={g.id}>
+                    <Icon name="delete" size={16} className="danger-text" />
+                    <span className="grow">{g.name}</span>
+                    <span className="tiny muted">{plural(g.memberCount, "member", "members")}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section className="stack-8" aria-labelledby="del-joined">
+            <h3 id="del-joined" className="field-label">
+              Groups you joined: they stay, your name becomes “Deleted account”
+            </h3>
+            {preview.memberProjects.length === 0 ? (
+              <p className="small muted">You haven't joined any other groups.</p>
+            ) : (
+              <ul className="del-list">
+                {preview.memberProjects.map((g) => (
+                  <li key={g.id}>
+                    <Icon name="person_off" size={16} className="muted" />
+                    <span className="grow">{g.name}</span>
+                    {preview.blockingProjects.some((b) => b.id === g.id) && <span className="tiny danger-text strong">Open transfers</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <p className="small muted">Your email and sign-in are removed. This can't be undone.</p>
+          <Field label="Type DELETE to confirm">
+            {(p) => (
+              <input
+                {...p}
+                className="input"
+                value={typed}
+                disabled={blocked}
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                onChange={(e) => setTyped(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void confirmDelete()}
+              />
+            )}
+          </Field>
+          {error && (
+            <div className="form-error" role="alert">
+              <Icon name="error" size={18} />
+              {error}
+            </div>
+          )}
+        </>
+      )}
+    </Sheet>
   );
 }
 

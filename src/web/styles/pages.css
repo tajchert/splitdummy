@@ -1753,6 +1753,45 @@
   }
 }
 
+/* ---------- account danger zone ---------- */
+.danger-zone {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1.5px solid color-mix(in srgb, var(--red) 45%, var(--line));
+  border-radius: var(--r-xl);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.btn-danger-outline {
+  border: 1.5px solid var(--red);
+  color: var(--red);
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background: var(--red-soft);
+}
+.del-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.del-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+.del-list li + li {
+  border-top: 1px solid var(--line);
+}
+.sheet-foot:has(.btn-danger) {
+  justify-content: flex-end;
+}
+
 /* ---------- freeze date ---------- */
 .freeze-date-empty {
   display: flex;

@@ -1019,6 +1019,10 @@ button.row:hover {
   .sheet-lg {
     width: min(720px, calc(100vw - 48px));
   }
+  .sheet-sm {
+    width: min(560px, calc(100vw - 48px));
+    height: fit-content;
+  }
   .sheet-panel {
     max-height: calc(100dvh - 64px);
   }

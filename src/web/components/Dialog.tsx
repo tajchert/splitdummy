@@ -20,7 +20,8 @@ export function Sheet({ title, onClose, headerAction, footer, children, size = "
   headerAction?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
-  size?: "md" | "lg";
+  /** sm: narrower, and only as tall as its content on desktop. */
+  size?: "sm" | "md" | "lg";
   labelledBy?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
