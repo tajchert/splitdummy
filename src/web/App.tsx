@@ -6,6 +6,7 @@ import { ToastProvider } from "./components/Toast";
 import { ScrollToTop } from "./components/Shell";
 import { Landing } from "./pages/Landing";
 import { SignIn, CheckInbox } from "./pages/SignIn";
+import { AuthConfirm } from "./pages/AuthConfirm";
 import { Account } from "./pages/Account";
 import { MyGroups } from "./pages/MyGroups";
 import { CreateGroup } from "./pages/CreateGroup";
@@ -29,9 +30,11 @@ export function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/signin" element={<SignIn />} />
       <Route path="/signin/sent" element={<CheckInbox />} />
+      <Route path="/auth/confirm" element={<AuthConfirm />} />
       <Route path="/account" element={<Account />} />
       <Route path="/groups" element={<MyGroups />} />
       <Route path="/groups/new" element={<CreateGroup />} />
+      <Route path="/join" element={<Join />} />
       <Route path="/join/:token" element={<Join />} />
       <Route path="/g/:projectId" element={<GroupLayout />}>
         <Route element={<GroupHome />}>

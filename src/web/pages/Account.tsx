@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useApi, useSession } from "../api/context";
 import { errorMessage } from "../api/errors";
 import { useSubmit } from "../api/idempotency";
@@ -28,6 +28,7 @@ function AccountInner() {
   const signOut = useSubmit();
   const [theme, setTheme] = useState<ThemePref>(getThemePref());
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [params] = useSearchParams();
   if (!me) return null;
 
   return (
@@ -38,6 +39,12 @@ function AccountInner() {
           <BackButton to="/groups" />
         </div>
         <h1 className="page-h1">Account</h1>
+        {params.get("error") === "email_in_use" && (
+          <Banner tone="amber" icon="info" role="alert">
+            That email already belongs to another account
+            <p>Your guest access is unchanged. To use that account, sign out and sign in with the email; groups you joined as a guest stay with this browser.</p>
+          </Banner>
+        )}
 
         <section className="card" aria-labelledby="acc-who">
           <h2 id="acc-who" className="card-title">

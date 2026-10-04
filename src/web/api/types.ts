@@ -21,6 +21,7 @@ import type {
   ReviewDTO,
   RoundViewDTO,
   SignInRequestedDTO,
+  SignInVerifiedDTO,
   TransferOwnershipSchema,
   UpdateEntrySchema,
   UpdateSettingsSchema,
@@ -31,8 +32,7 @@ export type AttachEmailBody = z.input<typeof AttachEmailSchema>;
 export type CreateProjectBody = z.input<typeof CreateProjectSchema>;
 export type UpdateSettingsBody = z.input<typeof UpdateSettingsSchema>;
 export type PutRateBody = z.input<typeof PutRateSchema>;
-/** turnstileToken is sent additively; the edge validates it on join. */
-export type JoinBody = z.input<typeof JoinSchema> & { turnstileToken?: string };
+export type JoinBody = z.input<typeof JoinSchema>;
 export type EntryBody = EntryInput;
 export type UpdateEntryBody = z.input<typeof UpdateEntrySchema>;
 export type DeleteEntryBody = z.input<typeof DeleteEntrySchema>;
@@ -66,6 +66,8 @@ export interface Api {
   /** null when there is no session (401). */
   getMe(): Promise<MeDTO | null>;
   requestSignIn(body: RequestSignInBody, o: MutationOptions): Promise<SignInRequestedDTO>;
+  /** Exchange the /auth/confirm#token=… fragment for a session; resolves with where to go next. */
+  verifySignIn(token: string, o: MutationOptions): Promise<SignInVerifiedDTO>;
   signOut(o: MutationOptions): Promise<void>;
   attachEmail(body: AttachEmailBody, o: MutationOptions): Promise<SignInRequestedDTO>;
 

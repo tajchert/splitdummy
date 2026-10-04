@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import type { InvitationPreviewDTO } from "@shared/api";
 import { DisplayNameSchema } from "@shared/api";
 import { useApi, useSession } from "../api/context";
@@ -23,7 +23,10 @@ const UNAVAILABLE: Record<Exclude<InvitationPreviewDTO["status"], "OPEN">, { ico
 };
 
 export function Join() {
-  const { token = "" } = useParams();
+  const params = useParams();
+  const { hash } = useLocation();
+  // Invitation links carry the token in the fragment (/join#<token>) so it never hits server logs.
+  const token = params.token ?? decodeURIComponent(hash.slice(1));
   const api = useApi();
   const { me, refresh } = useSession();
   const navigate = useNavigate();
@@ -39,6 +42,10 @@ export function Join() {
   useTitle(preview ? `Join ${preview.projectName}` : "Join a group");
 
   useEffect(() => {
+    if (!token) {
+      setLoadError(new ApiError(404, "NOT_FOUND", "This invitation link is incomplete."));
+      return;
+    }
     api.previewInvite(token).then(setPreview, (e) => setLoadError(e instanceof ApiError ? e : null));
   }, [api, token]);
 
@@ -152,7 +159,7 @@ export function Join() {
                 <p className="small">
                   <b>Joining as a guest</b> keeps you signed in on this browser. To open the group on another device later, add your email from your account page.
                 </p>
-                <Link to={`/signin?next=${encodeURIComponent(`/join/${token}`)}`} className="link-btn small">
+                <Link to={`/signin?next=${encodeURIComponent(`/join/${encodeURIComponent(token)}`)}`} className="link-btn small">
                   <Icon name="mail" size={16} />
                   Sign in with email instead
                 </Link>

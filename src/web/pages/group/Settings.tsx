@@ -17,9 +17,6 @@ import { activeMembers, nameOf, toneFor } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
 import { groupBase } from "./parts";
 
-/** Additive, optional contract field: a pending ownership offer, if the server sends one. */
-type MaybePendingOwnership = { pendingOwnership?: { toMemberId: string; offeredAt: string } | null };
-
 export function Settings() {
   const view = useView();
   const loc = useLocation();
@@ -531,9 +528,9 @@ function Members({ view }: { view: ProjectViewDTO }) {
 function PendingOwnership({ view }: { view: ProjectViewDTO }) {
   const api = useApi();
   const m = useMutation();
-  const pending = (view as ProjectViewDTO & MaybePendingOwnership).pendingOwnership;
-  if (!pending) return null;
-  if (pending.toMemberId === view.me.memberId) {
+  const pendingId = view.project.pendingOwnerMemberId;
+  if (!pendingId) return null;
+  if (pendingId === view.me.memberId) {
     return (
       <Banner
         tone="blue"
@@ -543,7 +540,7 @@ function PendingOwnership({ view }: { view: ProjectViewDTO }) {
             type="button"
             className="btn btn-sm btn-ink"
             disabled={m.pending}
-            onClick={() => void m.run({ accept: pending.offeredAt }, (k) => api.acceptOwnership(view.project.id, { idempotencyKey: k }), "You're now the owner")}
+            onClick={() => void m.run({ accept: pendingId }, (k) => api.acceptOwnership(view.project.id, { idempotencyKey: k }), "You're now the owner")}
           >
             Accept
           </button>
@@ -557,7 +554,7 @@ function PendingOwnership({ view }: { view: ProjectViewDTO }) {
   if (view.me.isOwner) {
     return (
       <Banner tone="neutral" icon="hourglass_top">
-        Waiting for {nameOf(view, pending.toMemberId)} to accept ownership
+        Waiting for {nameOf(view, pendingId)} to accept ownership
       </Banner>
     );
   }

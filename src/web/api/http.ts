@@ -10,6 +10,7 @@ import type {
   ReviewDTO,
   RoundViewDTO,
   SignInRequestedDTO,
+  SignInVerifiedDTO,
 } from "@shared/api";
 import { ApiError, networkError, parseErrorBody } from "./errors";
 import type { Api, LiveHandlers, LiveSubscription, MutationOptions } from "./types";
@@ -98,6 +99,7 @@ export function createHttpApi(opts: HttpOptions = {}): Api {
       }
     },
     requestSignIn: (body, o) => request<SignInRequestedDTO>("POST", "/api/auth/email", body, o),
+    verifySignIn: (token, o) => request<SignInVerifiedDTO>("POST", "/api/auth/verify", { token }, o),
     signOut: (o) => request<void>("POST", "/api/auth/logout", {}, o),
     attachEmail: (body, o) => request<SignInRequestedDTO>("POST", "/api/me/email", body, o),
 

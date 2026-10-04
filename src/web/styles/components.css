@@ -612,8 +612,24 @@ textarea.input {
   color: var(--ink2);
   pointer-events: none;
 }
-.input-with-icon > .input {
+.input-with-icon > .input,
+.input-with-icon > .select-wrap > .input {
   padding-left: 40px;
+}
+/* Our own calendar icon replaces the native one; the native picker still opens on click. */
+.input-with-icon {
+  isolation: isolate;
+}
+.input-with-icon input[type="date"] {
+  position: relative;
+}
+.input-with-icon input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  opacity: 0;
+  cursor: pointer;
 }
 .select-wrap {
   position: relative;
@@ -1120,7 +1136,7 @@ button.row:hover {
   background: var(--amber-soft);
   color: var(--amber);
 }
-.live-pill .icon {
+.live-pill .icon-spin {
   animation: spin 1.4s linear infinite;
 }
 @keyframes spin {

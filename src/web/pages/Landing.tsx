@@ -4,11 +4,11 @@ import { useSession } from "../api/context";
 import { useTitle, UserChip } from "../components/Shell";
 import { FinishTrack, Icon, Logo } from "../components/ui";
 
-/** Accepts a full invitation URL, a /join/… path, or the bare token. */
+/** Accepts a full invitation URL (/join#token or /join/token), or the bare token. */
 export function inviteTokenFrom(input: string): string | null {
   const s = input.trim();
   if (!s) return null;
-  const m = s.match(/\/join\/([^/?#\s]+)/);
+  const m = s.match(/\/join(?:\/|#)([^/?#\s]+)/);
   if (m) return decodeURIComponent(m[1]!);
   if (/^[A-Za-z0-9_.-]{16,200}$/.test(s)) return s;
   return null;
@@ -26,7 +26,7 @@ function InviteBox({ compact }: { compact?: boolean }) {
       setError("That doesn't look like an invitation link. Paste the whole link you were sent.");
       return;
     }
-    navigate(`/join/${encodeURIComponent(t)}`);
+    navigate({ pathname: "/join", hash: encodeURIComponent(t) });
   };
   return (
     <form className={compact ? "invite-inline" : "card invite-card"} onSubmit={submit} noValidate>

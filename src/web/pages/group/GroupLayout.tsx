@@ -80,7 +80,7 @@ export function LiveIndicator({ mobile }: { mobile?: boolean }) {
   if (live === "open" || live === "connecting") return null;
   return (
     <span className={`live-pill${mobile ? " live-pill-m" : ""}`} role="status">
-      <Icon name={live === "offline" ? "cloud_off" : "sync"} size={14} />
+      <Icon name={live === "offline" ? "cloud_off" : "sync"} size={14} className={live === "offline" ? undefined : "icon-spin"} />
       {live === "offline" ? "Offline: showing last saved data" : "Reconnecting…"}
     </span>
   );

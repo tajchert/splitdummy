@@ -372,7 +372,7 @@ function FxPanel({ d, ctx, ev, errors, saved, usingSaved, view, update, sep }: {
 }) {
   const base = ctx.baseCurrency;
   const rateText = effectiveRate(d, ctx);
-  const preview = ev.computed && ev.amountMinor !== null;
+  const preview = ev.baseTotal !== null && ev.amountMinor !== null;
   return (
     <section className="fx" aria-label="Currency conversion">
       <div className="fx-head">
@@ -454,11 +454,11 @@ function FxPanel({ d, ctx, ev, errors, saved, usingSaved, view, update, sep }: {
       {preview && (
         <div className="fx-preview" aria-live="polite">
           <span className="fx-preview-line">
-            {fmtMoney(ev.amountMinor!, d.currency, ev.exponent)} → {fmtMoney(ev.computed!.baseAmount, base, ctx.baseExponent)}
+            {fmtMoney(ev.amountMinor!, d.currency, ev.exponent)} → {fmtMoney(ev.baseTotal!, base, ctx.baseExponent)}
           </span>
           {d.convMode === "ACTUAL" && (
             <span className="tiny">
-              1 {d.currency} = {fmtRate(ev.computed!.rateString)} {base}
+              1 {d.currency} = {fmtRate(ev.rateDisplay ?? "")} {base}
             </span>
           )}
         </div>

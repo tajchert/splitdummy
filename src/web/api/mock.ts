@@ -45,7 +45,7 @@ interface MockProject {
   rounds: MockRound[]; // oldest first
   invitations: (InvitationDTO & { token: string })[];
   events: AuditEventDTO[];
-  pendingOwnership: { toMemberId: string; offeredAt: string } | null;
+  pendingOwnership: string | null;
 }
 
 interface Principal {
@@ -601,15 +601,14 @@ export function createMockApi(): MockApi {
     const m = memberOf(p);
     const cur = active(p);
     return {
-      project: { ...p.project },
+      project: { ...p.project, pendingOwnerMemberId: p.pendingOwnership },
       me: { memberId: m.id, isOwner: m.isOwner },
       members: p.members.map((x) => ({ ...x })),
       rates: p.rates.map((x) => ({ ...x })),
       current: roundView(p, cur),
       rounds: [...p.rounds].reverse().map((r) => ({ ...r.round })),
       invitations: m.isOwner ? p.invitations.map(({ token: _t, ...i }) => ({ ...i })) : null,
-      pendingOwnership: p.pendingOwnership,
-    } as ProjectViewDTO;
+    };
   };
 
   /** Mutation wrapper: idempotency replay, persistence, live notification. */
@@ -677,7 +676,16 @@ export function createMockApi(): MockApi {
         }
         const target = p.id;
         // The mock "link" signs in when opened.
-        return { sent: true as const, devLink: `/mock-signin?as=${target}&next=${encodeURIComponent(body.next ?? "/groups")}` };
+        // Mock tokens just encode who signs in and where to go; the page reloads before use.
+        const token = `tok.${target}.${encodeURIComponent(body.next ?? "/groups")}`;
+        return { sent: true as const, devLink: `${location.origin}/auth/confirm#token=${encodeURIComponent(token)}` };
+      }),
+    verifySignIn: (token, o) =>
+      mutate(o, null, "", () => {
+        const [tag, principal, next] = token.split(".");
+        if (tag !== "tok" || !principal || !state.principals[principal]) fail(410, "SIGNIN_LINK_INVALID", "This sign-in link has expired or was already used. Request a new one.");
+        state.me = principal;
+        return { next: decodeURIComponent(next ?? "/groups") };
       }),
     signOut: (o) =>
       mutate(o, null, "", () => {
@@ -783,7 +791,7 @@ export function createMockApi(): MockApi {
         const token = `${id}.${crypto.randomUUID().replace(/-/g, "")}`;
         const inv = { id: uid("inv_"), token, createdAt: now(), expiresAt: new Date(Date.now() + 14 * 86400_000).toISOString(), revokedAt: null };
         p.invitations.push(inv);
-        return { id: inv.id, createdAt: inv.createdAt, expiresAt: inv.expiresAt, revokedAt: null, url: `${location.origin}/join/${token}` };
+        return { id: inv.id, createdAt: inv.createdAt, expiresAt: inv.expiresAt, revokedAt: null, url: `${location.origin}/join#${token}` };
       }),
     revokeInvite: (id, inviteId, o) =>
       mutate(o, id, "INVITE_REVOKED", () => {
@@ -868,14 +876,14 @@ export function createMockApi(): MockApi {
         const m = ownerOnly(p);
         const to = p.members.find((x) => x.id === body.toMemberId && x.status === "ACTIVE");
         if (!to || !to.hasRecoverableAccount) fail(422, "VALIDATION", "The new owner needs an account with a verified email.", "toMemberId");
-        p.pendingOwnership = { toMemberId: to.id, offeredAt: now() };
+        p.pendingOwnership = to.id;
         log(p, m.id, "OWNERSHIP_OFFERED", null, to.id, `${m.displayName} offered ownership to ${to.displayName}`);
       }),
     acceptOwnership: (id, o) =>
       mutate(o, id, "OWNERSHIP_ACCEPTED", () => {
         const p = proj(id);
         const m = memberOf(p);
-        if (p.pendingOwnership?.toMemberId !== m.id) fail(409, "INVALID_TRANSITION", "There's no ownership offer for you.");
+        if (p.pendingOwnership !== m.id) fail(409, "INVALID_TRANSITION", "There's no ownership offer for you.");
         for (const x of p.members) x.isOwner = x.id === m.id;
         p.project.ownerMemberId = m.id;
         p.pendingOwnership = null;
@@ -1144,14 +1152,6 @@ export function createMockApi(): MockApi {
         }, 4000);
       }
   };
-  // The mock sign-in link: /mock-signin?as=<principal>&next=/groups
-  if (location.pathname === "/mock-signin") {
-    const q = new URLSearchParams(location.search);
-    state.me = q.get("as");
-    save(state);
-    history.replaceState(null, "", q.get("next") ?? "/groups");
-  }
-
   api.DevPanel = function MockDevPanel() {
     const [open, setOpen] = useState(false);
     if (new URLSearchParams(location.search).has("nodev")) return null;
@@ -1175,7 +1175,7 @@ export function createMockApi(): MockApi {
         h("button", { key: k, style: btn, onClick: () => ((state = seed(k)), save(state), location.reload()) }, `Reset: Lisbon ${k}`),
       ),
       h("button", { style: btn, onClick: simulateDisconnect }, "Simulate disconnect (4s)"),
-      h("a", { style: { ...btn, textDecoration: "none" }, href: "/join/p_porto.demo-invite-token-0001" }, "Open demo invitation"),
+      h("a", { style: { ...btn, textDecoration: "none" }, href: "/join#p_porto.demo-invite-token-0001" }, "Open demo invitation"),
       h("button", { style: btn, onClick: () => setOpen(false) }, "Close"),
     );
   };

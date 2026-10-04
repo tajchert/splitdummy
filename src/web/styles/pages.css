@@ -1158,6 +1158,7 @@
 }
 .stat-v {
   font-size: 20px;
+  white-space: nowrap;
 }
 .settled-side {
   display: flex;
@@ -1238,7 +1239,7 @@
     text-align: left;
   }
   .stat-v {
-    font-size: 22px;
+    font-size: 21px;
   }
   .done-row {
     padding: 12px 18px;
@@ -1454,9 +1455,25 @@
     border-radius: 14px;
     padding: 12px 14px;
   }
+  .fx-rate {
+    order: 0;
+  }
+  .fx-preview {
+    order: 1;
+  }
   .fx-head {
-    order: 5;
+    order: 2;
     margin-left: auto;
+  }
+  .fx > .field-error {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .fx-src {
+    order: 4;
+  }
+  .fx-foot {
+    order: 5;
   }
   .fx-title {
     display: none;

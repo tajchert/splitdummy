@@ -153,8 +153,12 @@ export interface EntryEvaluation {
   amountMinor: bigint | null;
   exponent: number;
   foreign: boolean;
-  /** Present when everything computes; drives the live preview. */
+  /** Present when everything computes; drives the live shares. */
   computed: ComputedEntry | null;
+  /** Converted total, available as soon as amount and conversion are valid (split may still be off). */
+  baseTotal: bigint | null;
+  /** Rate for display (derived for an actual charged amount). */
+  rateDisplay: string | null;
   /** Exact mode: sum of typed shares, for the "assigned / left" line. */
   exactAssigned: bigint | null;
   body: EntryInput | null;
@@ -232,6 +236,26 @@ export function evaluateEntry(d: EntryDraft, ctx: FormContext): EntryEvaluation 
     }
   }
 
+  let baseTotal: bigint | null = null;
+  let rateDisplay: string | null = null;
+  if (amountMinor !== null && conversion) {
+    // Conversion preview only: the split doesn't affect the base total.
+    const pre = computeEntry({
+      type: d.type,
+      originalAmount: amountMinor,
+      originalExponent: exponent,
+      baseExponent: ctx.baseExponent,
+      conversion,
+      payerMemberId: "preview",
+      splitMode: "EQUAL",
+      participants: ["preview"],
+    });
+    if (pre.ok) {
+      baseTotal = pre.value.baseAmount;
+      rateDisplay = pre.value.rateString;
+    }
+  }
+
   let computed: ComputedEntry | null = null;
   if (amountMinor !== null && conversion && people.length > 0 && d.payer && (d.splitMode === "EQUAL" || (shares && !errors.split))) {
     const res = computeEntry({
@@ -267,7 +291,7 @@ export function evaluateEntry(d: EntryDraft, ctx: FormContext): EntryEvaluation 
       }
     : null;
 
-  return { errors, amountMinor, exponent, foreign, computed, exactAssigned, body };
+  return { errors, amountMinor, exponent, foreign, computed, baseTotal, rateDisplay, exactAssigned, body };
 }
 
 /** Map a server field path onto the form's field keys. */
