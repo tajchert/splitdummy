@@ -1,0 +1,83 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "splitdummy",
+  "account_id": "7e814786800e88ac74b5acc9033370d4",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "routes": [
+    { "pattern": "splitdummy.app", "custom_domain": true }
+  ],
+  "vars": {
+    "APP_ORIGIN": "https://splitdummy.app",
+    "EMAIL_FROM": "Splitdummy <hello@splitdummy.app>",
+    "ENVIRONMENT": "production"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "PROJECT", "class_name": "ProjectDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectDO"] }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "splitdummy-prod",
+      "database_id": "f7e5ba1d-5842-41ee-b5a8-fb2d42824435",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [{ "binding": "EVENTS", "queue": "splitdummy-events" }],
+    "consumers": [
+      {
+        "queue": "splitdummy-events",
+        "max_batch_size": 25,
+        "max_retries": 5,
+        "dead_letter_queue": "splitdummy-events-dlq"
+      }
+    ]
+  },
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "splitdummy-backups" }],
+  "send_email": [{ "name": "EMAIL" }],
+  "env": {
+    "staging": {
+      "name": "splitdummy-staging",
+      "routes": [
+        { "pattern": "staging.splitdummy.app", "custom_domain": true }
+      ],
+      "vars": {
+        "APP_ORIGIN": "https://staging.splitdummy.app",
+        "EMAIL_FROM": "Splitdummy Staging <hello@splitdummy.app>",
+        "ENVIRONMENT": "staging"
+      },
+      "durable_objects": {
+        "bindings": [{ "name": "PROJECT", "class_name": "ProjectDO" }]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "splitdummy-staging",
+          "database_id": "31190111-8d70-497a-8c63-3017eeb41186",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "queues": {
+        "producers": [{ "binding": "EVENTS", "queue": "splitdummy-staging-events" }],
+        "consumers": [
+          {
+            "queue": "splitdummy-staging-events",
+            "max_batch_size": 25,
+            "max_retries": 5,
+            "dead_letter_queue": "splitdummy-staging-events-dlq"
+          }
+        ]
+      },
+      "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "splitdummy-staging-backups" }],
+      "send_email": [{ "name": "EMAIL" }]
+    }
+  }
+}
