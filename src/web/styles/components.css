@@ -606,6 +606,7 @@ textarea.input {
 }
 .input-with-icon > .icon {
   position: absolute;
+  z-index: 2;
   left: 14px;
   top: 50%;
   translate: 0 -50%;

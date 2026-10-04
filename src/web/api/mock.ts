@@ -768,14 +768,14 @@ export function createMockApi(): MockApi {
         log(p, m.id, "SETTINGS_UPDATED", r.round.id, null, `${m.displayName} changed the group settings`);
       }),
     putRate: (id, cur, body, o) =>
-      mutate(o, id, "RATE_SET", () => {
+      mutate(o, id, "RATE_DEFAULT_SET", () => {
         const p = proj(id);
         const m = ownerOnly(p);
         const ex = p.rates.find((r) => r.currency === cur);
         if (ex && body.expectedRevision !== undefined && body.expectedRevision !== ex.revision) fail(409, "STALE_VERSION", "Someone changed this rate. Check it and try again.");
         if (ex) Object.assign(ex, { rate: body.rate, setByMemberId: m.id, setAt: now(), revision: ex.revision + 1 });
         else p.rates.push({ currency: cur, rate: body.rate, setByMemberId: m.id, setAt: now(), revision: 1 });
-        log(p, m.id, "RATE_SET", null, null, `${m.displayName} saved 1 ${cur} = ${body.rate} ${p.project.baseCurrency}`);
+        log(p, m.id, "RATE_DEFAULT_SET", null, null, `${m.displayName} saved 1 ${cur} = ${body.rate} ${p.project.baseCurrency}`);
       }),
     deleteRate: (id, cur, o) =>
       mutate(o, id, "RATE_DELETED", () => {
@@ -889,7 +889,7 @@ export function createMockApi(): MockApi {
         p.pendingOwnership = null;
         const r = active(p);
         if (r.round.status === "COLLECTING") clearReady(r, "all");
-        log(p, m.id, "OWNERSHIP_ACCEPTED", null, m.id, `${m.displayName} is now the owner`);
+        log(p, m.id, "OWNERSHIP_TRANSFERRED", null, m.id, `${m.displayName} is now the owner`);
       }),
 
     createEntry: (id, roundId, body, o) =>

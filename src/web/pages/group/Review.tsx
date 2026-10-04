@@ -31,6 +31,7 @@ export function Review() {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const prev = useRef<ReviewDTO | null>(null);
+  const freezing = useRef(false);
   useTitle(`Review & freeze · ${view.project.name}`);
 
   const load = useCallback(
@@ -57,9 +58,12 @@ export function Review() {
   );
 
   const firstTick = useRef(changeTick);
+  const collecting = round.status === "COLLECTING";
   useEffect(() => {
+    // After a freeze (ours or from elsewhere) there is nothing left to review.
+    if (!collecting || freezing.current) return;
     void load(changeTick === firstTick.current ? undefined : "live");
-  }, [changeTick, round.id]);
+  }, [changeTick, round.id, collecting]);
 
   if (round.status !== "COLLECTING") {
     return (
@@ -108,6 +112,7 @@ export function Review() {
       acknowledgeNotReady: needsAck ? notReady : [],
       ...(needsAck ? { earlyFreezeReason: reason.trim() } : {}),
     };
+    freezing.current = true;
     try {
       await freeze.run(body, (k) => api.freeze(view.project.id, round.id, body, { idempotencyKey: k }));
       setConfirming(false);
@@ -115,6 +120,7 @@ export function Review() {
       toast(review.proposedTransfers.length ? "Frozen. Repayments are ready." : "Frozen and settled: no repayments needed.");
       navigate(base, { replace: true });
     } catch (e) {
+      freezing.current = false;
       setConfirming(false);
       if (e instanceof ApiError && (e.code === "REVIEW_STALE" || e.code === "NOT_READY_UNACKNOWLEDGED" || e.code === "STALE_VERSION")) {
         await load("stale");

@@ -260,7 +260,7 @@ function EntryDetailInner({ view, round, entry: e, onClose }: { view: ProjectVie
             </span>
           </li>
           {events
-            ?.filter((ev) => ev.action !== "ENTRY_CREATED")
+            ?.filter((ev) => ev.action !== "ENTRY_CREATED" && ev.action !== "REFUND_CREATED")
             .map((ev) => (
               <li key={ev.id}>
                 <Icon name="edit" size={16} />

@@ -12,22 +12,36 @@ import { useCsvExport } from "./GroupHome";
 import { groupBase } from "./parts";
 
 const ACTION_ICON: Record<string, string> = {
+  PROJECT_CREATED: "flag",
+  PROJECT_RENAMED: "edit",
   ENTRY_CREATED: "add_circle",
+  REFUND_CREATED: "call_received",
   ENTRY_UPDATED: "edit",
   ENTRY_DELETED: "delete",
   ADJUSTMENT_CREATED: "build",
   READY_SET: "task_alt",
   READY_CLEARED: "undo",
+  ROUND_STARTED: "layers",
   ROUND_FROZEN: "lock",
   ROUND_SETTLED: "sports_score",
-  ROUND_STARTED: "layers",
   INSTRUCTION_SENT: "send",
   INSTRUCTION_CONFIRMED: "check_circle",
   INSTRUCTION_DISPUTED: "report",
   MEMBER_JOINED: "person_add",
+  MEMBER_REJOINED: "person_add",
+  MEMBER_LEFT: "logout",
   MEMBER_REMOVED: "person_remove",
+  MEMBER_ACCOUNT_UPDATED: "verified_user",
+  OWNERSHIP_OFFERED: "workspace_premium",
+  OWNERSHIP_TRANSFERRED: "workspace_premium",
+  INVITATION_CREATED: "link",
+  INVITATION_REVOKED: "link_off",
+  MULTI_CURRENCY_ENABLED: "currency_exchange",
+  MULTI_CURRENCY_DISABLED: "currency_exchange",
+  BASE_CURRENCY_CHANGED: "payments",
+  RATE_DEFAULT_SET: "currency_exchange",
+  RATE_DEFAULT_DELETED: "currency_exchange",
   SETTINGS_UPDATED: "settings",
-  RATE_SET: "currency_exchange",
 };
 
 function RoundLine({ r, base, current }: { r: RoundDTO; base: string; current: boolean }) {
