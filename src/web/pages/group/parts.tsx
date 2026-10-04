@@ -347,7 +347,14 @@ export function ReadinessCard({ view }: { view: ProjectViewDTO }) {
           return (
             <li key={m.id} className="ready-list-row">
               <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={30} />
-              <span className="ready-list-name">{nameOf(view, m.id, { you: true })}</span>
+              <span className="ready-list-name">
+                {nameOf(view, m.id, { you: true })}
+                {m.id === view.me.memberId && (
+                  <Link to={`${base}/settings#your-name`} className="icon-btn icon-btn-xs" aria-label="Change your name in this group">
+                    <Icon name="edit" size={15} />
+                  </Link>
+                )}
+              </span>
               <span className={`ready-list-status${st.ready ? " is-ready" : ""}`}>{st.text}</span>
             </li>
           );

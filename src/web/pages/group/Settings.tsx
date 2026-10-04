@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import type { InvitationDTO, MemberDTO, ProjectViewDTO } from "@shared/api";
-import { ProjectNameSchema } from "@shared/api";
+import { DisplayNameSchema, ProjectNameSchema } from "@shared/api";
 import { parseRate, rateToString } from "@shared/money";
 import { useApi } from "../../api/context";
 import { ApiError, errorMessage } from "../../api/errors";
@@ -39,6 +39,7 @@ export function Settings() {
         </p>
       )}
       <PendingOwnership view={view} />
+      <YourName view={view} />
       <GroupName view={view} />
       <CurrencySettings view={view} />
       {(view.project.multiCurrencyEnabled || view.rates.length > 0) && <RateDefaults view={view} />}
@@ -75,6 +76,40 @@ function useMutation() {
     }
   };
   return { run, pending: sub.pending, error, setError };
+}
+
+/** Any member can change their own name in this group; the change shows in History. */
+function YourName({ view }: { view: ProjectViewDTO }) {
+  const api = useApi();
+  const m = useMutation();
+  const current = view.members.find((x) => x.id === view.me.memberId)?.displayName ?? "";
+  const [name, setName] = useState(current);
+  const [fieldErr, setFieldErr] = useState<string | undefined>();
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const p = DisplayNameSchema.safeParse(name);
+    if (!p.success) return setFieldErr(p.error.issues[0]?.message);
+    if (p.data === current) return;
+    const body = { displayName: p.data };
+    const ok = await m.run(body, (k) => api.renameMe(view.project.id, body, { idempotencyKey: k }), "Your name is updated");
+    if (ok) setName(p.data);
+  };
+  return (
+    <form className="card" id="your-name" onSubmit={submit} noValidate aria-labelledby="s-you">
+      <h2 id="s-you" className="card-title">
+        Your name in this group
+      </h2>
+      <div className="inline-form">
+        <Field label="Name" error={fieldErr ?? m.error ?? undefined} className="grow">
+          {(p) => <input {...p} className="input" value={name} maxLength={40} autoComplete="nickname" onChange={(e) => (setName(e.target.value), setFieldErr(undefined))} />}
+        </Field>
+        <button type="submit" className="btn btn-secondary btn-md" disabled={m.pending || name.trim() === current || !name.trim()}>
+          Save
+        </button>
+      </div>
+      <p className="tiny muted">Everyone in the group sees it. The change is noted in History.</p>
+    </form>
+  );
 }
 
 function GroupName({ view }: { view: ProjectViewDTO }) {

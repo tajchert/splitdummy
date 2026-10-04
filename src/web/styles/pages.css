@@ -725,6 +725,14 @@
 .ready-list-name {
   flex: 1;
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.icon-btn-xs {
+  min-width: 26px;
+  min-height: 26px;
 }
 .ready-list-status {
   font-size: 12px;
