@@ -120,7 +120,7 @@ function CurrencySettings({ view }: { view: ProjectViewDTO }) {
   const [confirmMulti, setConfirmMulti] = useState<boolean | null>(null);
   const [base, setBase] = useState(p.baseCurrency);
 
-  const toggleBlocked = settling ? "Currency settings are locked while everyone settles up." : p.multiCurrencyEnabled && foreign > 0 ? `${foreign} ${foreign === 1 ? "entry" : "entries"} in this round use another currency. Change or delete ${foreign === 1 ? "it" : "them"} before turning this off.` : null;
+  const toggleBlocked = settling ? "Currency settings are locked while everyone settles up." : p.multiCurrencyEnabled && foreign > 0 ? `${foreign} ${foreign === 1 ? "entry in this round uses" : "entries in this round use"} another currency. Change or delete ${foreign === 1 ? "it" : "them"} before turning this off.` : null;
 
   const applyMulti = async (v: boolean) => {
     const body = { expectedVersion: p.version, multiCurrencyEnabled: v };
