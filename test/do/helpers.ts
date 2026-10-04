@@ -42,8 +42,8 @@ export class Client {
   }
 
   /** Call and assert a 2xx; returns the body. */
-  async ok<T = any>(op: DoOp, params: Record<string, string> = {}, body: unknown = null, key?: string): Promise<T> {
-    const res = await this.call(op, params, body, key);
+  async ok<T = any>(op: DoOp, params: Record<string, string> = {}, body: unknown = null, key?: string | null): Promise<T> {
+    const res = await this.call(op, params, body, key === undefined ? crypto.randomUUID() : key);
     if (res.status >= 300) throw new Error(`${op} failed: ${res.status} ${JSON.stringify(res.body)}`);
     return res.body as T;
   }

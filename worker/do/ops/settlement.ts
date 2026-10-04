@@ -176,7 +176,6 @@ function transition(tx: Tx, req: DoRequest, action: Action): OpResult {
     (action === "DISPUTED" && instruction.state === "DISPUTED");
   if (already) return result(tx, round.id, instruction.id);
 
-  if (round.status !== "SETTLING") throw notSettling();
   const allowed: Record<Action, InstructionRow["state"][]> = {
     SENT: ["PROPOSED", "DISPUTED"],
     CONFIRMED: ["SENT", "DISPUTED"],
@@ -187,6 +186,7 @@ function transition(tx: Tx, req: DoRequest, action: Action): OpResult {
       state: instruction.state,
     });
   }
+  if (round.status !== "SETTLING") throw notSettling();
   if (body.expectedRevision !== undefined && body.expectedRevision !== instruction.revision) {
     throw conflict("STALE_VERSION", "This transfer changed since you opened it.", { currentRevision: instruction.revision });
   }
