@@ -1,3 +1,4 @@
+import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { InvitationPreviewDTO, MemberDTO, ProjectDTO } from "@shared/api";
 import { PRINCIPAL_HEADER } from "../../worker/do/types";
@@ -123,6 +124,39 @@ describe("invitations and joining", () => {
     });
     // An existing member re-joining still just gets their identity back.
     expect((await bob.ok("join", { tokenSecret: token }, { displayName: "Bob" })).memberId).toBe(bob.memberId);
+  });
+});
+
+describe("invitation expiry and limits", () => {
+  it("reports expired invitations and enforces the member cap before mutating", async () => {
+    const g = await createGroup({ members: 0 });
+    const token = await inviteToken(g);
+    const anon = new Client(g.stub, g.projectId, makePrincipal({ recoverable: false }));
+    await runInDurableObject(g.stub, (_i, state) => {
+      state.storage.sql.exec("UPDATE invitations SET expires_at = '2000-01-01T00:00:00.000Z'");
+    });
+    expect((await anon.ok<InvitationPreviewDTO>("previewInvite", { tokenSecret: token }, null, null)).status).toBe("EXPIRED");
+    expect(await errorCode(anon.call("join", { tokenSecret: token }, { displayName: "Late" }))).toMatchObject({
+      status: 409,
+      code: "INVITE_INVALID",
+      details: { status: "EXPIRED" },
+    });
+
+    const fresh = await inviteToken(g);
+    await runInDurableObject(g.stub, (_i, state) => {
+      for (let i = 0; i < 49; i++) {
+        state.storage.sql.exec(
+          "INSERT INTO members (id, principal_id, display_name, is_guest, has_recoverable_account, joined_at, status) VALUES (?, ?, 'X', 1, 0, '2026-01-01', 'ACTIVE')",
+          `m_fill_${i}`,
+          `pr_fill_${i}`,
+        );
+      }
+    });
+    expect(await errorCode(anon.call("join", { tokenSecret: fresh }, { displayName: "One too many" }))).toMatchObject({
+      status: 429,
+      code: "LIMIT_EXCEEDED",
+    });
+    expect((await g.owner.view()).members).toHaveLength(50);
   });
 });
 

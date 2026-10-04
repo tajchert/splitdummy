@@ -30,6 +30,11 @@ export class Tx {
     readonly principal: Principal | null,
   ) {}
 
+  /** 404 when this object holds no project (never created implicitly). */
+  requireProject(): void {
+    if (!this.store.project()) throw notFound();
+  }
+
   get project(): ProjectRow {
     const p = this.store.project();
     if (!p) throw notFound();
@@ -40,7 +45,7 @@ export class Tx {
   member(): MemberRow {
     if (this.cachedMember) return this.cachedMember;
     if (!this.principal) throw unauthenticated();
-    this.project;
+    this.requireProject();
     const m = this.store.memberByPrincipal(this.principal.principalId);
     if (!m || m.status === "REMOVED") throw notFound();
     this.cachedMember = m;

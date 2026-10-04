@@ -443,7 +443,7 @@ const PrincipalBody = z.object({
 export function principalUpdated(tx: Tx, req: DoRequest): DoResponse {
   const body = parseBody(PrincipalBody, req.body);
   if (tx.principal && tx.principal.principalId !== body.principalId) throw forbidden("Principal mismatch.");
-  tx.project;
+  tx.requireProject();
   const member = tx.store.memberByPrincipal(body.principalId);
   if (member) {
     const recoverable = body.hasRecoverableAccount ? 1 : 0;
