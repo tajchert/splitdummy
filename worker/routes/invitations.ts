@@ -30,12 +30,9 @@ invitationRoutes.post("/api/invitations/join", async (c) => {
   const ip = clientIp(c.req.raw);
   await enforceLimit(c.env.RL_JOIN, `ip:${ip}`);
   const idempotencyKey = requireIdempotencyKey(c);
-  const raw = await readJsonBody(c.req.raw);
-  const input = parseWith(JoinSchema, raw);
+  const input = parseWith(JoinSchema, await readJsonBody(c.req.raw));
   const { projectId, tokenSecret } = parseInviteToken(input.token);
-  const turnstileToken =
-    (raw as { turnstileToken?: unknown } | undefined)?.turnstileToken ?? c.req.header("x-turnstile-token");
-  await verifyTurnstile(c.env, typeof turnstileToken === "string" ? turnstileToken : undefined, ip);
+  await verifyTurnstile(c.env, input.turnstileToken ?? c.req.header("x-turnstile-token"), ip);
 
   // No session yet: mint an independent guest principal. Its cookie is only issued once the
   // DO accepts the join; on rejection the speculative principal is deleted again.
