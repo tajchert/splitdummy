@@ -29,7 +29,7 @@ export async function verifyTurnstile(env: Env, token: string | undefined, remot
     body.append("secret", secret);
     body.append("response", token);
     if (remoteIp !== "unknown") body.append("remoteip", remoteIp);
-    const res = await fetch(SITEVERIFY_URL, { method: "POST", body });
+    const res = await fetch(SITEVERIFY_URL, { method: "POST", body, signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error(`siteverify HTTP ${res.status}`);
     result = await res.json<SiteverifyResult>();
   } catch (err) {

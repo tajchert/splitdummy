@@ -19,7 +19,9 @@
     "ENVIRONMENT": "production",
     "TURNSTILE_SITE_KEY": "0x4AAAAAAFNyE7Ukj_gERhnU"
   },
-  // Set with `wrangler secret put TURNSTILE_SECRET` (see docs/ARCHITECTURE.md → Operations).
+  // Turnstile widget "splitdummy" (0x4AAAAAAFNyE7Ukj_gERhnU). Deploy refuses to run without it.
+  // First deploy of an env: wrangler deploy --secrets-file <0600 temp file with TURNSTILE_SECRET=...>
+  // Rotate later: cf turnstile widgets get <sitekey> | jq -r '.secret // .result.secret' | wrangler secret put TURNSTILE_SECRET [--env staging]
   "secrets": { "required": ["TURNSTILE_SECRET"] },
   // Daily R2 backup of every project + D1 housekeeping.
   "triggers": { "crons": ["17 3 * * *"] },
