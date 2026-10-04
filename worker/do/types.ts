@@ -42,6 +42,7 @@ export type DoOp =
   | "startRound"
   | "getHistory"
   | "exportCsv" // returns body as CSV string with content-type header
+  | "backupSnapshot" // internal (principal null, edge cron only): full JSON dump of all tables for R2
   | "principalUpdated"; // edge notifies that a principal attached a verified email; body: Principal
 
 export interface DoRequest {

@@ -62,6 +62,18 @@ export interface ApiErrorBody {
 }
 
 // ---------- DTOs (responses) ----------
+export interface ConfigDTO {
+  /** Turnstile site key; null disables the widget (local dev/tests). */
+  turnstileSiteKey: string | null;
+  environment: "production" | "staging" | "development" | "test";
+}
+
+/** POST /api/auth/email response. devLink is ONLY returned outside production for local testing. */
+export interface SignInRequestedDTO {
+  sent: true;
+  devLink?: string;
+}
+
 export interface MeDTO {
   principalId: string;
   kind: "ACCOUNT" | "GUEST";
@@ -377,7 +389,8 @@ export const TransferOwnershipSchema = z.object({ toMemberId: IdSchema });
 
 // ---------- endpoints (reference) ----------
 export const ENDPOINTS = {
-  me: "GET /api/me",
+  config: "GET /api/config", // -> ConfigDTO (public)
+  me: "GET /api/me", // -> MeDTO | 401
   signIn: "POST /api/auth/email",
   verify: "GET /api/auth/verify?token=", // redirects to `next` after setting cookie
   signOut: "POST /api/auth/logout",
