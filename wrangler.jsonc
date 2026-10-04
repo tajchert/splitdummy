@@ -16,8 +16,21 @@
   "vars": {
     "APP_ORIGIN": "https://splitdummy.app",
     "EMAIL_FROM": "Splitdummy <hello@splitdummy.app>",
-    "ENVIRONMENT": "production"
+    "ENVIRONMENT": "production",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAFNyE7Ukj_gERhnU"
   },
+  // Set with `wrangler secret put TURNSTILE_SECRET` (see docs/ARCHITECTURE.md → Operations).
+  "secrets": { "required": ["TURNSTILE_SECRET"] },
+  // Daily R2 backup of every project + D1 housekeeping.
+  "triggers": { "crons": ["17 3 * * *"] },
+  // Workers Rate Limiting; namespace_id must be unique per account (prod 1xxx, staging 2xxx).
+  "ratelimits": [
+    { "name": "RL_SIGNIN_IP", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
+    { "name": "RL_SIGNIN_EMAIL", "namespace_id": "1002", "simple": { "limit": 3, "period": 60 } },
+    { "name": "RL_CREATE_PROJECT", "namespace_id": "1003", "simple": { "limit": 5, "period": 60 } },
+    { "name": "RL_JOIN", "namespace_id": "1004", "simple": { "limit": 10, "period": 60 } },
+    { "name": "RL_MUTATION", "namespace_id": "1005", "simple": { "limit": 120, "period": 60 } }
+  ],
   "durable_objects": {
     "bindings": [{ "name": "PROJECT", "class_name": "ProjectDO" }]
   },
@@ -52,8 +65,18 @@
       "vars": {
         "APP_ORIGIN": "https://staging.splitdummy.app",
         "EMAIL_FROM": "Splitdummy Staging <hello@splitdummy.app>",
-        "ENVIRONMENT": "staging"
+        "ENVIRONMENT": "staging",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAFNyE7Ukj_gERhnU"
       },
+      "secrets": { "required": ["TURNSTILE_SECRET"] },
+      "triggers": { "crons": ["17 3 * * *"] },
+      "ratelimits": [
+        { "name": "RL_SIGNIN_IP", "namespace_id": "2001", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_SIGNIN_EMAIL", "namespace_id": "2002", "simple": { "limit": 3, "period": 60 } },
+        { "name": "RL_CREATE_PROJECT", "namespace_id": "2003", "simple": { "limit": 5, "period": 60 } },
+        { "name": "RL_JOIN", "namespace_id": "2004", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_MUTATION", "namespace_id": "2005", "simple": { "limit": 120, "period": 60 } }
+      ],
       "durable_objects": {
         "bindings": [{ "name": "PROJECT", "class_name": "ProjectDO" }]
       },
