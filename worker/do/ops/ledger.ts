@@ -1,4 +1,5 @@
 /** Ledger ops: expenses, refunds, adjustments, readiness. All require the active collecting round. */
+import { setEntryAttachments, trashEntryAttachments } from "./attachments";
 import {
   AdjustmentInputSchema,
   DeleteEntrySchema,
@@ -254,6 +255,7 @@ export function createEntry(tx: Tx, req: DoRequest): OpResult {
     tx.now,
   );
   writeSplits(tx, id, p);
+  if (input.attachmentIds?.length) setEntryAttachments(tx, id, input.attachmentIds, me);
   lockBaseCurrency(tx);
   tx.financial();
   tx.clearReadiness([me.id]);
@@ -331,6 +333,7 @@ export function updateEntry(tx: Tx, req: DoRequest): OpResult {
     row.id,
   );
   writeSplits(tx, row.id, p);
+  if (input.attachmentIds !== undefined) setEntryAttachments(tx, row.id, input.attachmentIds, me);
   tx.financial();
   tx.clearReadiness([me.id, row.creator_member_id]);
   const after = entryDto(tx.store.loadEntry(row.id)!);
@@ -363,6 +366,7 @@ export function deleteEntry(tx: Tx, req: DoRequest): OpResult {
     tx.now,
     row.id,
   );
+  trashEntryAttachments(tx, row.id);
   tx.financial();
   tx.clearReadiness([me.id, row.creator_member_id]);
   tx.audit("ENTRY_DELETED", `${me.display_name} deleted “${row.description}” ${money(row.original_amount, row.original_exponent, row.original_currency)}`, {
