@@ -1,45 +1,84 @@
+import { ATTACHMENT_TRASH_BATCH } from "../do/limits";
+import { attachmentKey } from "../lib/attachments";
 import { logError, logInfo } from "../lib/log";
 import { callProject, isOk } from "../lib/project";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BACKUP_CONCURRENCY = 5;
 
-/** Daily cron: versioned R2 backups of every project, then D1 housekeeping. */
+/** Daily cron: versioned R2 backups of every project, photo cleanup, then D1 housekeeping. */
 export async function handleScheduled(env: Env): Promise<void> {
   await backupAllProjects(env);
+  await purgeAttachments(env);
   await housekeeping(env);
 }
 
-export async function backupAllProjects(env: Env): Promise<{ ok: number; failed: number }> {
+/** Runs `fn` for every directory project, BACKUP_CONCURRENCY at a time; counts failures (logged by the caller). */
+async function forEachProject(env: Env, fn: (projectId: string) => Promise<void>, label: string): Promise<{ ok: number; failed: number }> {
   const { results } = await env.DB.prepare("SELECT DISTINCT project_id FROM project_directory").all<{ project_id: string }>();
   const queue = results.map((r) => r.project_id);
-  const stamp = new Date().toISOString();
   let ok = 0;
   let failed = 0;
-
   const worker = async () => {
     for (let projectId = queue.shift(); projectId; projectId = queue.shift()) {
       try {
-        const res = await callProject(env, {
-          op: "backupSnapshot",
-          projectId,
-          principal: null,
-          requestId: `cron_${stamp}`,
-        });
-        if (!isOk(res)) throw new Error(`backupSnapshot status ${res.status}`);
-        await env.BACKUPS.put(`projects/${projectId}/${stamp}.json`, JSON.stringify(res.body), {
-          httpMetadata: { contentType: "application/json" },
-        });
+        await fn(projectId);
         ok++;
       } catch (err) {
         failed++;
-        logError("project backup failed", err, { projectId });
+        logError(`${label} failed`, err, { projectId });
       }
     }
   };
   await Promise.all(Array.from({ length: BACKUP_CONCURRENCY }, worker));
+  return { ok, failed };
+}
+
+export async function backupAllProjects(env: Env): Promise<{ ok: number; failed: number }> {
+  const stamp = new Date().toISOString();
+  const { ok, failed } = await forEachProject(
+    env,
+    async (projectId) => {
+      const res = await callProject(env, {
+        op: "backupSnapshot",
+        projectId,
+        principal: null,
+        requestId: `cron_${stamp}`,
+      });
+      if (!isOk(res)) throw new Error(`backupSnapshot status ${res.status}`);
+      await env.BACKUPS.put(`projects/${projectId}/${stamp}.json`, JSON.stringify(res.body), {
+        httpMetadata: { contentType: "application/json" },
+      });
+    },
+    "project backup",
+  );
   logInfo("backup finished", { ok, failed });
   return { ok, failed };
+}
+
+/** Deletes trashed photos from R2 and only then lets the DO forget them, so a failed delete is retried tomorrow. */
+export async function purgeAttachments(env: Env): Promise<{ deleted: number; failed: number }> {
+  const requestId = `cron_${new Date().toISOString()}`;
+  let deleted = 0;
+  const { failed } = await forEachProject(
+    env,
+    async (projectId) => {
+      for (;;) {
+        const taken = await callProject(env, { op: "takeAttachmentTrash", projectId, principal: null, requestId });
+        if (!isOk(taken)) throw new Error(`takeAttachmentTrash status ${taken.status}`);
+        const { ids } = taken.body as { ids: string[] };
+        if (ids.length === 0) return;
+        await env.ATTACHMENTS.delete(ids.map((id) => attachmentKey(projectId, id)));
+        const ack = await callProject(env, { op: "ackAttachmentTrash", projectId, principal: null, body: { ids }, requestId });
+        if (!isOk(ack)) throw new Error(`ackAttachmentTrash status ${ack.status}`);
+        deleted += ids.length;
+        if (ids.length < ATTACHMENT_TRASH_BATCH) return;
+      }
+    },
+    "photo purge",
+  );
+  logInfo("photo purge finished", { deleted, failed });
+  return { deleted, failed };
 }
 
 async function housekeeping(env: Env): Promise<void> {
