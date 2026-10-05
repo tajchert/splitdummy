@@ -63,7 +63,8 @@ ALTER TABLE project ADD COLUMN members_can_rename INTEGER NOT NULL DEFAULT 1;
 - `UpdateSettingsSchema` + `membersCanRename?: boolean`.
 - New schemas: `AddMemberSchema { displayName, email? }`, `InviteMemberSchema { email }`,
   `RenameMemberSchema` reused for owner rename, `AcceptMemberInviteSchema { token, displayName? }`.
-- New DTOs: `MemberInvitePreviewDTO { projectName, baseCurrency, displayName, status: "OPEN"|"EXPIRED"|"REVOKED"|"CLAIMED", canRename, alreadyMemberProjectId }`,
+- New DTOs: `MemberInvitePreviewDTO { projectName, baseCurrency, displayName, status: "OPEN"|"EXPIRED"|"CLAIMED", canRename, alreadyMemberProjectId }`
+  (cancelled or replaced links are unknown hashes → 404 `INVITE_INVALID`),
   `AddMemberResultDTO = MemberDTO & { emailSent: boolean | null }` (null when no email given).
 - New error codes: `EMAIL_REQUIRED` (link join without a verified email), `ALREADY_MEMBER` (accepting an invite
   while already an active member under another identity).
@@ -74,14 +75,15 @@ Endpoints:
 | Method + path | Op | Who |
 |---|---|---|
 | `POST /api/projects/:id/members` | `addMember` | owner |
-| `PATCH /api/projects/:id/members/:memberId` | `renameMember` | owner |
+| `PATCH /api/projects/:id/members/:memberId/name` | `renameMember` | owner |
 | `POST /api/projects/:id/members/:memberId/invite` | `inviteMember` (attach email or resend: new secret, new 7 days) | owner |
 | `DELETE /api/projects/:id/members/:memberId/invite` | `cancelMemberInvite` (back to plain placeholder) | owner |
 | `GET /api/member-invites/:token` | `previewMemberInvite` | public |
 | `POST /api/member-invites/accept` | `acceptMemberInvite` | public (email link proves the address) |
 
-`worker/do/types.ts`: add the ops above. `previewMemberInvite` also returns `invitedEmail` **to the edge only**
-(the edge strips it before responding). Token format matches link invites: `${projectId}.${secret}`.
+`worker/do/types.ts`: add the ops above, plus `DoResponse.transient` (edge-only data: the invite email to send, or the
+invited address from `previewMemberInvite`). `ProjectDO` never writes `transient` to the idempotency table, and the
+edge never returns it to browsers. Token format matches link invites: `${projectId}.${secret}`.
 
 Add the new endpoints to the public-API allowlist (`src/shared/public-api.ts`) for the owner member ops only. The
 member-invite routes stay cookie/unauthenticated-only, like `/api/invitations/*`.
@@ -101,7 +103,7 @@ member-invite routes stay cookie/unauthenticated-only, like `/api/invitations/*`
   `FORBIDDEN` "The owner manages names in this group." when `members_can_rename = 0` and the caller isn't the owner.
   `acceptMemberInvite.displayName` is ignored when renaming is locked. Audits: `MEMBER_RENAMED` with
   `details.byMemberId` for owner renames; `MEMBER_ADDED`, `MEMBER_INVITED`, `MEMBER_INVITE_CANCELLED`,
-  `MEMBER_CLAIMED`, `SETTINGS_UPDATED` (rename lock).
+  `MEMBER_CLAIMED`, `MEMBER_RENAME_POLICY_CHANGED` (rename lock).
 - **Directory/notifications**: `DIRECTORY_UPSERT` and `NOTIFY` skip `ph:` principals. A claim emits a directory
   upsert so the group appears in the new member's "My groups".
 
@@ -111,11 +113,11 @@ member-invite routes stay cookie/unauthenticated-only, like `/api/invitations/*`
 
 1. Owner submits `{ displayName, email? }`. The edge rate-limits (`RL_MUTATION` per principal, plus
    `RL_SIGNIN_EMAIL` per invited address).
-2. When an email is present, the edge prepares `{ secret, secretHash }` as for link invites. The DO inserts the
-   placeholder and stores the hash, `invited_email`, `invite_sent_at` and `invite_expires_at`, then returns the
-   accept URL `${APP_ORIGIN}/invite#${projectId}.${secret}`.
-   - The DO rejects the email if an active PERSON member already has it as a verified email, or another
-     placeholder already has it as `invited_email` (422 on the `email` field).
+2. When an email is present, `ProjectDO.prepare()` generates `{ secret, secretHash }` as it does for link invites.
+   The DO inserts the placeholder and stores the hash, `invited_email`, `invite_sent_at` and `invite_expires_at`. It
+   returns the mail (with the accept URL `${APP_ORIGIN}/invite#${projectId}.${secret}`) in `DoResponse.transient`.
+   - The DO rejects the email if another live placeholder already has it as `invited_email` (422 on the `email`
+     field). An existing member with that address is caught at accept time (`ALREADY_MEMBER`).
 3. The edge sends `memberInviteEmail({ inviterName, projectName, displayName, url, expiresAt })` synchronously,
    like sign-in links. The response includes `emailSent`. A failed send leaves the invite in place, and the UI
    offers "Resend". Local dev returns `devLink` as sign-in does.
@@ -161,8 +163,8 @@ member-invite routes stay cookie/unauthenticated-only, like `/api/invitations/*`
 
 - Rows show a chip: *Placeholder*, *Invited · expires 12 Oct*, *Invite expired*, or the existing
   Owner/Member/Guest. The owner sees the invited email under the name.
-- A row menu offers whatever applies: Rename, Invite by email (placeholder), Resend invite (invited/expired),
-  Cancel invite, Remove.
+- A **Manage** button per row opens a small sheet with whatever applies: Rename, Invite by email (placeholder),
+  Resend invite (invited/expired), Cancel invite, Remove.
 - "Add person" opens a dialog with Name and Email (optional, "We'll email them an invitation valid for 7 days").
   The primary button reads "Add" or "Add & send invite".
 - Toggle: "Members can change their own name".
