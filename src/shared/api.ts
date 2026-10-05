@@ -22,6 +22,17 @@ export const DisplayNameSchema = z.string().trim().min(1, "Enter a name").max(40
 export const ProjectNameSchema = z.string().trim().min(1, "Enter a group name").max(80);
 export const DescriptionSchema = z.string().trim().min(1, "Enter a description").max(140);
 
+export const NOTE_MAX = 1000;
+/** Free text on an entry. "" is normalized to null by the server. */
+export const NoteSchema = z.string().trim().max(NOTE_MAX, `Keep the note under ${NOTE_MAX} characters`);
+
+// ---------- photos ----------
+export const ATTACHMENT_TYPES = ["image/webp", "image/jpeg"] as const;
+export type AttachmentContentType = (typeof ATTACHMENT_TYPES)[number];
+export const MAX_ATTACHMENT_BYTES = 1_500_000;
+export const MAX_IMAGE_EDGE = 4096;
+export const MAX_ATTACHMENTS_PER_ENTRY = 5;
+
 export type RoundStatus = "COLLECTING" | "SETTLING" | "SETTLED";
 export type InstructionState = "PROPOSED" | "SENT" | "CONFIRMED" | "DISPUTED";
 export type EntryType = "EXPENSE" | "REFUND" | "ADJUSTMENT";
@@ -172,6 +183,14 @@ export interface AmountSplitDTO {
   baseAmount: string;
 }
 
+export interface AttachmentDTO {
+  id: string;
+  contentType: AttachmentContentType;
+  bytes: number;
+  width: number;
+  height: number;
+}
+
 export interface EntryDTO {
   id: string;
   roundId: string;
@@ -203,6 +222,10 @@ export interface EntryDTO {
   adjustmentEffects: AmountSplitDTO[] | null;
   correctedEntryId: string | null;
   correctedRoundId: string | null;
+  /** Free-text note; null when none. */
+  note: string | null;
+  /** Receipt photos in display order. */
+  attachments: AttachmentDTO[];
   revision: number;
   createdAt: string;
   updatedAt: string;
@@ -410,6 +433,14 @@ export const EntryInputSchema = z.object({
     .array(z.object({ memberId: IdSchema, amount: MinorSchema.optional() }))
     .min(1, "Pick at least one person")
     .max(100),
+  /** Update: omitted = unchanged; null or "" clears. */
+  note: NoteSchema.nullable().optional(),
+  /** Uploaded photo ids in display order. Update: omitted = unchanged; [] removes all. */
+  attachmentIds: z
+    .array(IdSchema)
+    .max(MAX_ATTACHMENTS_PER_ENTRY, `Add at most ${MAX_ATTACHMENTS_PER_ENTRY} photos`)
+    .refine((ids) => new Set(ids).size === ids.length, "This photo is listed twice")
+    .optional(),
 });
 export type EntryInput = z.infer<typeof EntryInputSchema>;
 
