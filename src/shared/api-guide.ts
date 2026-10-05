@@ -89,6 +89,7 @@ ${examples.group}
 \`\`\`
 The response contains project, me, members, rates, current and rounds.
 Use current.round.id as roundId, me.memberId as your memberId, and members[].id for participants.
+Members with kind PLACEHOLDER were added by the owner and have not joined yet; they can still pay and share expenses.
 Current balances are in current.balances. Positive net means receives; negative net means owes.
 
 ## Add an expense with Python

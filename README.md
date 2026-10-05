@@ -47,6 +47,7 @@ Forgot something after the freeze? Start a **new round**. Frozen rounds are neve
 | 🌍 **Multi-currency** | Optional per group; saved manual rates, one settlement currency |
 | 🔁 **Refunds** | First-class entries, never confused with repayments |
 | ⏰ **Freeze deadline** | Optionally freeze the list automatically on a chosen date |
+| 👥 **People without accounts** | Owner adds people by name, invites them by email, and stands in for them when settling |
 | 🤝 **Settlement tracking** | Sent → received or disputed, at most *n − 1* transfers |
 | ⚡ **Live updates** | Changes appear instantly for everyone via WebSockets |
 | 🧾 **Audit history and CSV export** | Every change is recorded; export a group to CSV |

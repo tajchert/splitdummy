@@ -70,9 +70,11 @@ Keep the database model capable of multiple contributions, but expose one payer 
 | Mark/unmark personal readiness | Yes | Yes |
 | Mark someone else ready | No | No |
 | Change currency settings or manage invitations | Yes | No |
+| Add placeholders, invite them by email, rename members, lock self-renaming | Yes | No |
+| Rename yourself in a group | Yes | Yes, unless the owner locked names |
 | Freeze/start settlement | Yes | No |
-| Mark a transfer sent | Only when its sender | Only when its sender |
-| Confirm receipt or dispute receipt | Only when its recipient | Only when its recipient |
+| Mark a transfer sent | When its sender, or for a placeholder sender | Only when its sender |
+| Confirm receipt or dispute receipt | When its recipient, or for a placeholder recipient | Only when its recipient |
 | Start a subsequent round | Yes | No |
 | Rewrite a frozen round | No | No |
 
@@ -205,7 +207,8 @@ Each payer’s base contribution equals the saved base amount. Refunds use posit
 | Owner review | Readiness, currencies/rates, totals, provisional plan, freeze acknowledgement |
 | Group — settling | Fixed instructions, personal send/receive tasks, disputes, progress, read-only expenses |
 | Group — settled | All settled, history, export, owner action to start next round |
-| Settings | Currency mode and rate defaults, invitations, membership, ownership, account recovery |
+| Settings | Currency mode and rate defaults, invitation links, membership (add/rename/invite placeholders, rename lock), ownership, account recovery |
+| Accept email invite | Group name, the placeholder's name (editable unless names are locked), Join; signs in as the invited email |
 
 Use clear expense/refund/transfer vocabulary. The main add button creates a shared expense, never a repayment disguised as an expense. Explain simplified transfers: “You owe the group X; this payment routes part of that amount to someone the group owes.”
 

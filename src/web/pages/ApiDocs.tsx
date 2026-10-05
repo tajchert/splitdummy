@@ -44,7 +44,7 @@ export function ApiDocs() {
         <h2 className="card-title">3. Read expenses and balances</h2>
         <Code text={examples.group} label="curl: read a group" />
         <p>The response includes <code>members</code>, <code>current.entries</code>, <code>current.balances</code> and settlement <code>current.instructions</code>.</p>
-        <p>Use <code>current.round.id</code> for the current round, <code>me.memberId</code> for yourself and <code>members[].id</code> for participants. Positive <code>net</code> means receives; negative means owes.</p>
+        <p>Use <code>current.round.id</code> for the current round, <code>me.memberId</code> for yourself and <code>members[].id</code> for participants. Members with <code>kind</code> <code>PLACEHOLDER</code> were added by the owner and haven’t joined yet; they can still pay and share expenses. Positive <code>net</code> means receives; negative means owes.</p>
       </section>
 
       <section className="card">

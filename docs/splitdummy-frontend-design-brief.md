@@ -19,10 +19,10 @@ Screens may be full pages, sheets, or dialogs where appropriate. The three group
 | Page / view | Content and available actions |
 |---|---|
 | **Landing** | Short product explanation, the finish-line promise, **Create a group**, **Sign in**, and a way to open an invitation. |
-| **Sign-in / account** | Email sign-in link, check-inbox confirmation, resend, expired-link recovery, sign out. Guests can optionally attach a verified email to recover access on another device. |
+| **Sign-in / account** | Email sign-in link, check-inbox confirmation, resend, expired-link recovery, sign out. Older guest sessions can attach a verified email to recover access on another device. |
 | **My groups** | Group cards with name, currency, state, and personal next action; create group; open active or settled groups. Empty state explains how to start. No combined debt across groups. |
 | **Create group** | Group name, settlement currency, optional **“Allow expenses in other currencies”** toggle. Off by default. Explain that everyone repays in the settlement currency. |
-| **Join invitation** | Group name, display-name input, **Join as guest**, optional sign-in. Explain guest recovery briefly. Handle expired/revoked links and groups whose membership is frozen. Never offer to take over an existing member by name. |
+| **Join invitation** | Group name, display-name input. Signed in with a verified email: one **Join** button. Otherwise: name + email, **Email me a link**; the link returns and finishes the join. Handle expired/revoked links and groups whose membership is frozen. Never offer to take over an existing member by name. |
 | **Group — collecting** | Status, current round, total in settlement currency, your provisional balance, expense/refund list, readiness checklist (**“3 of 5 finished”**), **Add expense**, **Add refund**, and **“Everything added from my side”** with undo. Owner also sees invitation controls and **Review & freeze**. |
 | **Add / edit expense** | Description, date, amount, one payer, included members, equal split by default, exact amounts as an alternative. Show allocated shares and validation. Currency controls appear only when enabled. Save/cancel; permitted edits and deletion are available while collecting. |
 | **Add / edit refund** | Explicit refund label, description, date, amount, who received the money, and who benefits from it. Same currency and split controls as expenses. Do not present refunds as repayments. |
@@ -32,7 +32,8 @@ Screens may be full pages, sheets, or dialogs where appropriate. The three group
 | **Group — settling** | Frozen status and cutoff, fixed repayment cards, personal send/receive tasks, overall progress, disputes, and read-only expenses. Sender: **“I’ve sent it.”** Recipient after that: **“Received”** or **“Not received.”** Clearly state that the app does not transfer money. |
 | **Group — settled** | **All settled**, completion date, completed transfers, read-only entries, history, CSV export. Owner: **Start next round** for another period or forgotten expenses. Zero-balance rounds finish without repayment tasks. |
 | **History / rounds** | Round list with dates and states; open previous frozen expenses and repayment plans; activity timeline; CSV export. Keep active and historical rounds clearly separated. |
-| **Group settings** | Owner controls for currency mode, reusable exchange-rate defaults, invite creation/revocation, membership, and ownership transfer. Participant view shows relevant information without owner controls. Explain locked or unavailable actions. |
+| **Accept email invite** | Group name, "The owner added you as X", name (read-only when the owner locked names), **Join**. Expired/used links explain what to do. |
+| **Group settings** | Owner controls for currency mode, reusable exchange-rate defaults, invite link creation/revocation, membership (**Add person** by name with optional email invite, **Manage**: rename, invite/resend/cancel, remove; *Members can change their own name* toggle), and ownership transfer. Participant view shows relevant information without owner controls. Explain locked or unavailable actions. |
 | **Correction flow** | After a round is settled, owner starts a new round. Members add forgotten expenses/refunds there. Owner can correct a historical entry through an explained adjustment referencing it. Show that the old settlement remains unchanged. |
 
 ## Currency experience
