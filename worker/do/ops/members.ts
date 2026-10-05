@@ -1,12 +1,13 @@
 /** Owner-managed membership: placeholders (no account yet), email invites that claim them, and renames. */
-import { AddMemberSchema, RenameMemberSchema } from "@shared/api";
-import { invalid, limitExceeded, notFound, parseBody } from "../errors";
+import { AddMemberSchema, DisplayNameSchema, InviteMemberSchema, RenameMemberSchema, type JoinResultDTO, type MemberInvitePreviewDTO } from "@shared/api";
+import { z } from "zod";
+import { ApiError, conflict, forbidden, invalid, limitExceeded, notFound, parseBody } from "../errors";
 import { LIMITS, MEMBER_INVITE_TTL_MS } from "../limits";
 import { PLACEHOLDER_PREFIX, type MemberRow } from "../store";
 import { newId, type Tx } from "../tx";
-import type { DoRequest, DoResponse, DoTransient, MemberInviteMail } from "../types";
+import type { DoRequest, DoResponse, DoTransient, MemberInviteMail, Principal } from "../types";
 import { memberDto } from "../views";
-import type { OpResult } from "./project";
+import { ok, type OpResult } from "./project";
 
 export type InvitePrepared = { secret: string; secretHash: string };
 
@@ -96,4 +97,122 @@ export function renameMember(tx: Tx, req: DoRequest): OpResult {
     });
   }
   return memberResult(tx, target.id);
+}
+
+function placeholderParam(tx: Tx, req: DoRequest): MemberRow {
+  const target = tx.store.member(req.params.memberId ?? "");
+  if (!target || target.status === "REMOVED") throw notFound("This member isn't available.");
+  if (target.kind !== "PLACEHOLDER") throw conflict("INVALID_TRANSITION", `${target.display_name} has already joined.`);
+  return target;
+}
+
+export function inviteMember(tx: Tx, req: DoRequest, prepared: InvitePrepared, origin: string): OpResult {
+  tx.owner("Only the group owner can invite people.");
+  tx.requireNotSettling();
+  const body = parseBody(InviteMemberSchema, req.body);
+  const target = placeholderParam(tx, req);
+  assertEmailFree(tx, body.email, target.id);
+  const mail = issueInvite(tx, target, body.email, prepared, origin);
+  return memberResult(tx, target.id, 200, { inviteMail: mail });
+}
+
+export function cancelMemberInvite(tx: Tx, req: DoRequest): OpResult {
+  tx.owner("Only the group owner can manage invitations.");
+  tx.requireNotSettling();
+  const target = placeholderParam(tx, req);
+  if (target.invited_email !== null) {
+    tx.store.run(
+      "UPDATE members SET invited_email = NULL, invite_secret_hash = NULL, invite_sent_at = NULL, invite_expires_at = NULL WHERE id = ?",
+      target.id,
+    );
+    tx.audit("MEMBER_INVITE_CANCELLED", `Cancelled the email invitation for ${target.display_name}`, { entityId: target.id });
+  }
+  return memberResult(tx, target.id);
+}
+
+/** Cancelled and rotated links are unknown hashes (404). Claimed links keep their hash and report CLAIMED. */
+function inviteByHash(tx: Tx, secretHash: string): MemberRow {
+  const m = tx.store.first<MemberRow>("SELECT * FROM members WHERE invite_secret_hash = ?", secretHash);
+  if (!m || m.status === "REMOVED" || !tx.store.project()) {
+    throw new ApiError(404, "INVITE_INVALID", "This invitation link isn't valid anymore. Ask the owner to send a new one.");
+  }
+  return m;
+}
+
+function memberInviteStatus(tx: Tx, m: MemberRow): MemberInvitePreviewDTO["status"] {
+  if (m.kind !== "PLACEHOLDER") return "CLAIMED";
+  return Date.parse(m.invite_expires_at!) <= Date.parse(tx.now) ? "EXPIRED" : "OPEN";
+}
+
+export function previewMemberInvite(tx: Tx, prepared: { secretHash: string }): DoResponse {
+  const m = inviteByHash(tx, prepared.secretHash);
+  const project = tx.project;
+  const mine = tx.principal ? tx.store.memberByPrincipal(tx.principal.principalId) : undefined;
+  const body: MemberInvitePreviewDTO = {
+    projectName: project.name,
+    baseCurrency: project.base_currency,
+    displayName: m.display_name,
+    status: memberInviteStatus(tx, m),
+    canRename: project.members_can_rename === 1,
+    alreadyMemberProjectId: mine && mine.status === "ACTIVE" ? project.id : null,
+  };
+  return { status: 200, body, transient: { invitedEmail: m.invited_email! } };
+}
+
+/** Placeholder whose live email invite matches a verified address (used by link joins too). */
+export function findInvitedPlaceholder(tx: Tx, email: string): MemberRow | undefined {
+  return tx.store.first<MemberRow>(
+    "SELECT * FROM members WHERE kind = 'PLACEHOLDER' AND status = 'ACTIVE' AND invited_email = ?",
+    email,
+  );
+}
+
+/**
+ * The principal takes over the placeholder: same member id, so every entry and transfer carries over.
+ * Callers guarantee the principal has no ACTIVE/LEFT member here; a REMOVED one is retired first so
+ * the UNIQUE principal_id can move.
+ */
+export function claimPlaceholder(tx: Tx, m: MemberRow, principal: Principal, displayName: string | undefined): MemberRow {
+  const previous = tx.store.memberByPrincipal(principal.principalId);
+  if (previous && previous.id !== m.id) {
+    tx.store.run("UPDATE members SET principal_id = ? WHERE id = ?", `${PLACEHOLDER_PREFIX}${previous.id}`, previous.id);
+  }
+  const rename = displayName !== undefined && tx.project.members_can_rename === 1 && displayName !== m.display_name;
+  tx.store.run(
+    "UPDATE members SET principal_id = ?, kind = 'PERSON', is_guest = ?, has_recoverable_account = ?, display_name = ? WHERE id = ?",
+    principal.principalId,
+    principal.kind === "GUEST" ? 1 : 0,
+    principal.hasRecoverableAccount ? 1 : 0,
+    rename ? displayName : m.display_name,
+    m.id,
+  );
+  const member = tx.store.member(m.id)!;
+  tx.setActor(member);
+  tx.audit("MEMBER_CLAIMED", `${member.display_name} joined`, {
+    roundId: tx.activeRound()?.id ?? null,
+    entityId: member.id,
+    details: rename ? { from: m.display_name, to: displayName } : undefined,
+  });
+  tx.clearReadiness("ALL");
+  return member;
+}
+
+const AcceptBody = z.object({ displayName: DisplayNameSchema.optional() });
+
+export function acceptMemberInvite(tx: Tx, req: DoRequest, prepared: { secretHash: string }): OpResult {
+  const principal = tx.principal;
+  if (!principal?.email) throw new ApiError(401, "UNAUTHENTICATED", "Please sign in to continue.");
+  const body = parseBody(AcceptBody, req.body);
+  const m = inviteByHash(tx, prepared.secretHash);
+  const status = memberInviteStatus(tx, m);
+  if (status === "CLAIMED") throw conflict("INVITE_INVALID", "This invitation was already used.", { status });
+  if (status === "EXPIRED") throw conflict("INVITE_INVALID", "This invitation has expired. Ask the owner to send a new one.", { status });
+  if (principal.email !== m.invited_email) throw forbidden("This invitation is for a different email address.");
+  const mine = tx.store.memberByPrincipal(principal.principalId);
+  if (mine && mine.status !== "REMOVED") {
+    throw conflict("ALREADY_MEMBER", `You're already in this group as ${mine.display_name}.`, { memberId: mine.id });
+  }
+  claimPlaceholder(tx, m, principal, body.displayName);
+  const result: JoinResultDTO = { projectId: tx.project.id, memberId: m.id };
+  return () => ok(result);
 }

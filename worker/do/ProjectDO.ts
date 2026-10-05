@@ -11,7 +11,7 @@ import type { LiveMessage } from "@shared/api";
 import { ApiError, invalid, unauthenticated } from "./errors";
 import { accountDeletionInfo, anonymizeMember, deletionPrincipals } from "./ops/account";
 import { acceptOwnership, createInvite, createProject, deleteRate, join, leave, previewInvite, principalUpdated, putRate, removeMember, renameMe, revokeInvite, transferOwnership, updateSettings, type OpResult } from "./ops/project";
-import { addMember, renameMember } from "./ops/members";
+import { acceptMemberInvite, addMember, cancelMemberInvite, inviteMember, previewMemberInvite, renameMember } from "./ops/members";
 import { createAdjustment, createEntry, deleteEntry, setReadiness, updateEntry } from "./ops/ledger";
 import { backupSnapshot, exportCsv, getHistory, getProject, getReview, getRound } from "./ops/read";
 import { freeze, markDisputed, markReceived, markSent, scheduledFreeze, setFreezeSchedule, startRound } from "./ops/settlement";
@@ -25,6 +25,7 @@ type MutationOp = Exclude<DoOp, ReadOp | "deleteProject">;
 type ReadOp =
   | "getProject"
   | "previewInvite"
+  | "previewMemberInvite"
   | "getReview"
   | "getRound"
   | "getHistory"
@@ -34,6 +35,7 @@ type ReadOp =
 
 const READ_OPS: Record<ReadOp, (tx: Tx, req: DoRequest, prepared: Prepared) => DoResponse> = {
   getProject: (tx) => getProject(tx),
+  previewMemberInvite: (tx, _req, p) => previewMemberInvite(tx, { secretHash: p.secretHash! }),
   previewInvite: (tx, _req, p) => previewInvite(tx, { secretHash: p.secretHash! }),
   getReview: (tx, req) => getReview(tx, req),
   getRound: (tx, req) => getRound(tx, req),
@@ -114,6 +116,8 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
       const { projectVersion, outbox } = tx.finish();
       const response = typeof result === "function" ? result() : result;
       if (key && response.status < 300) {
+        // `transient` (invite URLs, invited emails) is edge-only and must never be stored.
+        const { transient: _edgeOnly, ...stored } = response;
         this.store.run(
           "INSERT INTO idempotency (principal_id, op, key, request_hash, status, response_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
           key.p,
@@ -121,7 +125,7 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
           key.k,
           requestHash,
           response.status,
-          JSON.stringify(response),
+          JSON.stringify(stored),
           tx.now,
         );
       }
@@ -168,7 +172,7 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
       const secret = randomSecret();
       return { secret, secretHash: await sha256Hex(secret) };
     }
-    if (req.op === "previewInvite" || req.op === "join") {
+    if (req.op === "previewInvite" || req.op === "join" || req.op === "previewMemberInvite" || req.op === "acceptMemberInvite") {
       const raw = req.params.tokenSecret ?? "";
       const dot = raw.lastIndexOf(".");
       const secret = dot >= 0 ? raw.slice(dot + 1) : raw;
@@ -239,11 +243,11 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
       case "renameMember":
         return renameMember(tx, req);
       case "inviteMember":
+        return inviteMember(tx, req, { secret: prepared.secret!, secretHash: prepared.secretHash! }, this.env.APP_ORIGIN);
       case "cancelMemberInvite":
-      case "previewMemberInvite":
+        return cancelMemberInvite(tx, req);
       case "acceptMemberInvite":
-        // Implemented in the backend batch.
-        throw invalid(undefined, `Operation ${op} is not implemented yet`);
+        return acceptMemberInvite(tx, req, { secretHash: prepared.secretHash! });
       default: {
         const unknownOp: never = op;
         throw invalid(undefined, `Unknown operation ${String(unknownOp)}`);
