@@ -125,8 +125,8 @@ scripts/deploy.sh production               # typecheck, build, migrate D1, deplo
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep commits small and [conventional](https://www.conventionalcommits.org/) (`feat(web): …`, `fix(do): …`), and make sure `npm test` and `npm run typecheck` pass. If you change the shared contracts in `src/shared/api.ts`, extend them additively.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-A license has not been chosen yet.
+Splitdummy is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE). You can use, self-host and modify it for personal and other non-commercial purposes. Commercial use, including selling it or running it as a paid service, needs a separate license from the author. The Splitdummy name and logo are covered by [TRADEMARKS.md](TRADEMARKS.md).
