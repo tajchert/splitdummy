@@ -10,6 +10,7 @@ import { Amount, Avatar, Banner, Icon } from "../../components/ui";
 import { fmtDateTime, fmtDay, fmtMoney, fmtRate } from "../../lib/format";
 import { canEditEntry, nameOf, roundLabel, toneFor } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
+import { EntryNote, EntryPhotos } from "./EntryAttachments";
 import { groupBase, Who } from "./parts";
 
 /** Provided by routes that show entries of a specific (possibly historical) round. */
@@ -190,6 +191,9 @@ function EntryDetailInner({ view, round, entry: e, onClose }: { view: ProjectVie
           </span>
         </section>
       )}
+
+      {e.note && <EntryNote note={e.note} />}
+      {e.attachments.length > 0 && <EntryPhotos projectId={view.project.id} attachments={e.attachments} />}
 
       {e.type === "ADJUSTMENT" ? (
         <section className="stack-8">

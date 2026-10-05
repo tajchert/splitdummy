@@ -225,6 +225,19 @@ export function EntryRow({ view, e, to }: { view: ProjectViewDTO; e: EntryDTO; t
             <span className="sr-only">Shared by </span>
             {count}
           </span>
+          {e.attachments.length > 0 && (
+            <span className="meta-item">
+              <Icon name="attach_file" size={14} />
+              <span className="sr-only">Photos </span>
+              {e.attachments.length}
+            </span>
+          )}
+          {e.note && (
+            <span className="meta-item" title="Has a note">
+              <Icon name="sticky_note_2" size={14} />
+              <span className="sr-only">Has a note</span>
+            </span>
+          )}
           <span className="meta-item mobile-only-inline">{fmtDay(e.occurredAt, true)}</span>
         </span>
       </div>
