@@ -18,6 +18,8 @@ R2 BACKUPS — versioned JSON exports for recovery
 EMAIL (send_email) — magic links + notifications
 ```
 
+Members: ProjectDO also holds placeholders (`kind = PLACEHOLDER`, synthetic `ph:` principal) and their 7-day email invites; invite secrets are stored hashed and leave the DO only via `DoResponse.transient`, which is never persisted. Account deletion anonymizes claimed placeholders and retired rows (`ph:retired:<principalId>:<memberId>`); invited emails are cleared on claim or removal.
+
 Environments: `production` → `splitdummy.app`, `staging` → `staging.splitdummy.app` (`wrangler deploy --env staging`).
 Account `7e814786800e88ac74b5acc9033370d4`. Resources are already created (see `wrangler.jsonc`).
 
