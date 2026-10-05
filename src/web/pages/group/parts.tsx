@@ -504,9 +504,8 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
   const amount = fmtMoney(i.amount, i.currency, i.exponent);
   const pid = view.project.id;
   const rid = i.roundId;
-  /** Null when this is your own task; otherwise the placeholder you're acting for. */
-  const forName = (id: string) => (id === me ? null : nameOf(view, id));
-  const forPrefix = (id: string) => (forName(id) ? `For ${forName(id)}: ` : "");
+  /** The owner acts for placeholders, who have no account to act with. */
+  const standIn = (id: string) => view.me.isOwner && member(view, id)?.kind === "PLACEHOLDER";
 
   const act = async (kind: "sent" | "received" | "dispute", body: { note?: string } = {}) => {
     setError(null);
@@ -529,19 +528,35 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
 
   let text: ReactNode;
   let actions: ReactNode;
-  if (i.toMemberId === me || (i.state === "SENT" && i.toMemberId !== i.fromMemberId && member(view, i.toMemberId)?.kind === "PLACEHOLDER")) {
-    text = (
+  const sentOn = i.sentAt ? ` on ${fmtShortDate(i.sentAt)}` : "";
+  const sendButton = (label: string) => (
+    <div className="task-actions">
+      <button type="button" className="btn btn-primary btn-md-tall" disabled={sub.pending} onClick={() => void act("sent")}>
+        <Icon name="send" size={18} />
+        {label}
+      </button>
+    </div>
+  );
+  if (i.state === "SENT" && (i.toMemberId === me || standIn(i.toMemberId))) {
+    // Confirm receipt: yours, or (owner) on behalf of a placeholder recipient.
+    const forWho = i.toMemberId === me ? null : nameOf(view, i.toMemberId);
+    text = forWho ? (
       <>
-        {forPrefix(i.toMemberId)}
+        {i.fromMemberId === me ? "You marked" : `${nameOf(view, i.fromMemberId)} says they sent`} <b className="amount">{amount}</b>
+        {i.fromMemberId === me ? ` as sent to ${forWho}` : ` to ${forWho}`}
+        {sentOn}. Did {forWho} get it?
+      </>
+    ) : (
+      <>
         {nameOf(view, i.fromMemberId)} says they sent you <b className="amount">{amount}</b>
-        {i.sentAt ? ` on ${fmtShortDate(i.sentAt)}` : ""}. Did you get it?
+        {sentOn}. Did you get it?
       </>
     );
     actions = (
       <div className="task-actions">
         <button type="button" className="btn btn-primary btn-md-tall" disabled={sub.pending} onClick={() => void act("received")}>
           <Icon name="check" size={18} />
-          {forName(i.toMemberId) ? `Received (for ${forName(i.toMemberId)})` : "Received"}
+          {forWho ? `Received (for ${forWho})` : "Received"}
         </button>
         <button type="button" className="btn btn-outline btn-md-tall" disabled={sub.pending} onClick={() => setDisputing(true)}>
           <Icon name="close" size={18} />
@@ -549,37 +564,37 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
         </button>
       </div>
     );
+  } else if (i.fromMemberId !== me) {
+    // Owner marks a placeholder's repayment once the placeholder has paid (PROPOSED or DISPUTED).
+    const forWho = nameOf(view, i.fromMemberId);
+    const to = i.toMemberId === me ? "you" : nameOf(view, i.toMemberId);
+    text =
+      i.state === "DISPUTED" ? (
+        <>
+          {i.toMemberId === me ? "You haven't" : `${to} hasn't`} received {forWho}'s <b className="amount">{amount}</b>
+          {i.disputeNote ? `: “${i.disputeNote}”` : "."} Mark it sent again once {forWho} has paid.
+        </>
+      ) : (
+        <>
+          {forWho} owes {to} <b className="amount">{amount}</b>. Mark it once {forWho} has paid.
+        </>
+      );
+    actions = sendButton(`Mark sent for ${forWho}`);
   } else if (i.state === "DISPUTED") {
     text = (
       <>
-        {forPrefix(i.fromMemberId)}
         {nameOf(view, i.toMemberId)} hasn't received your <b className="amount">{amount}</b>
         {i.disputeNote ? `: “${i.disputeNote}”` : "."} Sort it out with them, then mark it sent again.
       </>
     );
-    actions = (
-      <div className="task-actions">
-        <button type="button" className="btn btn-primary btn-md-tall" disabled={sub.pending} onClick={() => void act("sent")}>
-          <Icon name="send" size={18} />
-          {forName(i.fromMemberId) ? `Mark sent for ${forName(i.fromMemberId)}` : "I've sent it again"}
-        </button>
-      </div>
-    );
+    actions = sendButton("I've sent it again");
   } else {
     text = (
       <>
-        {forPrefix(i.fromMemberId)}
         Send <b className="amount">{amount}</b> to {nameOf(view, i.toMemberId)}, outside the app, then mark it here.
       </>
     );
-    actions = (
-      <div className="task-actions">
-        <button type="button" className="btn btn-primary btn-md-tall" disabled={sub.pending} onClick={() => void act("sent")}>
-          <Icon name="send" size={18} />
-          {forName(i.fromMemberId) ? `Mark sent for ${forName(i.fromMemberId)}` : "I've sent it"}
-        </button>
-      </div>
-    );
+    actions = sendButton("I've sent it");
   }
 
   return (

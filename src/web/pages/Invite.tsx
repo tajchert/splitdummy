@@ -11,12 +11,21 @@ import { useToast } from "../components/Toast";
 import { Icon, Logo } from "../components/ui";
 import { currencyName } from "../lib/format";
 
+/** The token from an /invite#<token> fragment; "" (an incomplete link) when it isn't valid percent-encoding. */
+function tokenFromHash(hash: string): string {
+  try {
+    return decodeURIComponent(hash.slice(1));
+  } catch {
+    return "";
+  }
+}
+
 /** Accepts an email invitation: claims the placeholder the owner made and confirms this email. */
 export function Invite() {
   const params = useParams();
   const { hash } = useLocation();
   // Emailed links carry the token in the fragment (/invite#<token>) so it never hits server logs.
-  const token = params.token ?? decodeURIComponent(hash.slice(1));
+  const token = params.token ?? tokenFromHash(hash);
   const api = useApi();
   const { refresh } = useSession();
   const navigate = useNavigate();
@@ -90,7 +99,7 @@ export function Invite() {
             <h1 className="page-h1">{preview.status === "EXPIRED" ? "This invitation has expired" : "This invitation was already used"}</h1>
             <p className="lede muted">{preview.status === "EXPIRED" ? "Ask the group owner to send you a new one." : "Sign in with the same email to open the group."}</p>
             {preview.status === "CLAIMED" && (
-              <Link to="/signin" className="btn btn-outline">
+              <Link to={`/signin?next=${encodeURIComponent("/groups")}`} className="btn btn-outline">
                 Sign in
               </Link>
             )}

@@ -34,7 +34,8 @@ export function AuthConfirm() {
     try {
       const r = await run({ token: t }, (k) => api.verifySignIn(t, { idempotencyKey: k }));
       await refresh();
-      navigate(r.next && r.next.startsWith("/") ? r.next : "/groups", { replace: true });
+      // justSignedIn tells pages like Join that this visit really came from the magic link (it may auto-submit).
+      navigate(r.next && r.next.startsWith("/") ? r.next : "/groups", { replace: true, state: { justSignedIn: true } });
     } catch (e) {
       const expired = e instanceof ApiError && (e.code === "SIGNIN_LINK_INVALID" || e.status === 410);
       setError({ expired, message: errorMessage(e) });

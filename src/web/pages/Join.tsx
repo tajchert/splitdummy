@@ -13,6 +13,15 @@ import { Icon, Logo } from "../components/ui";
 import { currencyName } from "../lib/format";
 import { useEmailLinkForm } from "./SignIn";
 
+/** The token from a /join#<token> fragment; "" (an incomplete link) when it isn't valid percent-encoding. */
+function tokenFromHash(hash: string): string {
+  try {
+    return decodeURIComponent(hash.slice(1));
+  } catch {
+    return "";
+  }
+}
+
 const UNAVAILABLE: Record<Exclude<InvitationPreviewDTO["status"], "OPEN">, { icon: string; title: string; body: string }> = {
   EXPIRED: { icon: "schedule", title: "This invitation has expired", body: "Ask the group owner for a new link." },
   REVOKED: { icon: "link_off", title: "This invitation was withdrawn", body: "The owner turned this link off. Ask them for a new one." },
@@ -25,9 +34,11 @@ const UNAVAILABLE: Record<Exclude<InvitationPreviewDTO["status"], "OPEN">, { ico
 
 export function Join() {
   const params = useParams();
-  const { hash } = useLocation();
+  const { hash, state: navState } = useLocation();
   // Invitation links carry the token in the fragment (/join#<token>) so it never hits server logs.
-  const token = params.token ?? decodeURIComponent(hash.slice(1));
+  const token = params.token ?? tokenFromHash(hash);
+  // Only AuthConfirm sets this: a crafted ?auto=1 link alone must never join without a click.
+  const fromMagicLink = (navState as { justSignedIn?: boolean } | null)?.justSignedIn === true;
   const api = useApi();
   const { me, refresh } = useSession();
   const navigate = useNavigate();
@@ -84,7 +95,7 @@ export function Join() {
 
   // Back from the magic link (?name=…&auto=1): join without another click.
   useEffect(() => {
-    if (autoStarted.current || search.get("auto") !== "1" || !verified || preview?.status !== "OPEN" || preview.alreadyMemberProjectId) return;
+    if (autoStarted.current || search.get("auto") !== "1" || !fromMagicLink || !verified || preview?.status !== "OPEN" || preview.alreadyMemberProjectId) return;
     const n = DisplayNameSchema.safeParse(search.get("name") ?? "");
     if (!n.success) return;
     autoStarted.current = true;
@@ -93,7 +104,7 @@ export function Join() {
     next.delete("auto");
     setSearch(next, { replace: true });
     void doJoin(n.data);
-  }, [search, verified, preview]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, verified, preview, fromMagicLink]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nameField = (
     <Field label="Your name" error={errors.displayName} hint="How others in the group will see you. Pick something they'll recognise.">
@@ -173,7 +184,7 @@ export function Join() {
                 <button type="submit" className="btn btn-primary btn-block" disabled={pending}>
                   {pending ? "Joining…" : "Join"}
                 </button>
-                <p className="tiny muted">Joining as {me!.email}. You'll be added as a new member; nobody can take over another person's place.</p>
+                <p className="tiny muted">Joining as {me!.email}. If the owner invited this email, you'll take over that spot; otherwise you're added as a new member.</p>
               </form>
             ) : (
               <form

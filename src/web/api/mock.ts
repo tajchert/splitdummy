@@ -65,7 +65,7 @@ interface MockProject {
   invitations: (InvitationDTO & { token: string })[];
   events: AuditEventDTO[];
   pendingOwnership: string | null;
-  memberInvites?: Record<string, { token: string; email: string }>; // memberId → live email invite
+  memberInvites?: Record<string, { token: string; email: string; claimed?: boolean }>; // memberId → email invite (kept once claimed)
 }
 
 interface Principal {
@@ -730,6 +730,9 @@ export function createMockApi(): MockApi {
   const log = (p: MockProject, actor: string | null, action: string, roundId: string | null, entityId: string | null, summary: string, details: Record<string, unknown> | null = null) =>
     p.events.push({ id: uid("ev_"), at: now(), actorMemberId: actor, action, roundId, entityId, summary, details });
   const nameOf = (p: MockProject, id: string) => p.members.find((m) => m.id === id)?.displayName ?? "Someone";
+  /** Settlement on behalf of a placeholder is logged under the placeholder, marked by the owner (as the DO does). */
+  const party = (p: MockProject, partyId: string, actor: MemberDTO) => (partyId === actor.id ? actor.displayName : nameOf(p, partyId));
+  const by = (partyId: string, actor: MemberDTO) => (partyId === actor.id ? "" : ` (marked by ${actor.displayName})`);
   const ph = (p: MockProject, memberId: string) => p.members.find((m) => m.id === memberId && m.status !== "REMOVED");
   const memberOut = (p: MockProject, m: MemberDTO, owner = true): MemberDTO => ({
     ...m,
@@ -737,7 +740,9 @@ export function createMockApi(): MockApi {
   });
   const claim = (p: MockProject, m: MemberDTO, pr: Principal, name?: string) => {
     p.principals[m.id] = pr.id;
-    delete p.memberInvites?.[m.id];
+    // Keep the claimed invite so its link previews as CLAIMED instead of disappearing.
+    const inv = p.memberInvites?.[m.id];
+    if (inv) inv.claimed = true;
     const renamed = name && p.project.membersCanRename ? name : m.displayName;
     Object.assign(m, { kind: "PERSON", inviteState: null, inviteExpiresAt: null, isGuest: false, hasRecoverableAccount: true, displayName: renamed });
     const r = active(p);
@@ -746,6 +751,11 @@ export function createMockApi(): MockApi {
       r.round.reviewVersion++;
     }
     log(p, m.id, "MEMBER_CLAIMED", r.round.id, m.id, `${m.displayName} joined`);
+  };
+  /** Two live placeholder invites in one group never share an email. */
+  const emailTaken = (p: MockProject, email: string, exceptMemberId?: string) => {
+    const taken = Object.entries(p.memberInvites ?? {}).some(([mid, v]) => mid !== exceptMemberId && !v.claimed && v.email === email && ph(p, mid)?.kind === "PLACEHOLDER");
+    if (taken) fail(422, "VALIDATION", "Someone in this group was already invited with this email.", "email");
   };
   const sendInvite = (p: MockProject, m: MemberDTO, email: string) => {
     const token = `${p.project.id}.${crypto.randomUUID().replace(/-/g, "")}`;
@@ -1049,7 +1059,7 @@ export function createMockApi(): MockApi {
         if (!pr || !pr.email) fail(401, "EMAIL_REQUIRED", "Confirm your email to join this group.");
         const existing = p.members.find((m) => p.principals[m.id] === pr.id && m.status === "ACTIVE");
         if (existing) return { projectId, memberId: existing.id };
-        const invitedId = Object.entries(p.memberInvites ?? {}).find(([, v]) => v.email === pr.email)?.[0];
+        const invitedId = Object.entries(p.memberInvites ?? {}).find(([, v]) => !v.claimed && v.email === pr.email)?.[0];
         const invited = invitedId ? p.members.find((m) => m.id === invitedId && m.kind === "PLACEHOLDER") : undefined;
         if (invited) {
           claim(p, invited, pr, d.data!.displayName);
@@ -1134,6 +1144,7 @@ export function createMockApi(): MockApi {
         const d = AddMemberSchema.safeParse(body);
         if (!d.success) zodFail(d.error.issues);
         if (active(p).round.status === "SETTLING") fail(409, "ROUND_NOT_COLLECTING", "Members are locked while settling.");
+        if (d.data!.email) emailTaken(p, d.data!.email);
         const mid = uid("m_");
         const m: MemberDTO = { id: mid, displayName: d.data!.displayName, isOwner: false, isGuest: false, hasRecoverableAccount: false, joinedAt: now(), status: "ACTIVE", referenced: false, accountDeleted: false, kind: "PLACEHOLDER", inviteState: null, inviteExpiresAt: null };
         p.members.push(m);
@@ -1163,6 +1174,7 @@ export function createMockApi(): MockApi {
         if (!d.success) zodFail(d.error.issues);
         const m = ph(p, memberId);
         if (!m || m.kind !== "PLACEHOLDER") fail(409, "INVALID_TRANSITION", "This person has already joined.");
+        emailTaken(p, d.data!.email, m.id);
         const devLink = sendInvite(p, m, d.data!.email);
         return { ...memberOut(p, m), emailSent: true, devLink };
       }),
@@ -1184,7 +1196,8 @@ export function createMockApi(): MockApi {
         if (!p || !m) fail(404, "INVITE_INVALID", "This invitation link isn't valid anymore. Ask the owner to send a new one.");
         const already = state.me ? p.members.find((x) => p.principals[x.id] === state.me && x.status === "ACTIVE") : undefined;
         const expired = new Date(m.inviteExpiresAt ?? 0).getTime() < Date.now();
-        return { projectName: p.project.name, baseCurrency: p.project.baseCurrency, displayName: m.displayName, status: expired ? "EXPIRED" : "OPEN", canRename: p.project.membersCanRename, alreadyMemberProjectId: already ? p.project.id : null };
+        const status = entry![1].claimed ? "CLAIMED" : expired ? "EXPIRED" : "OPEN";
+        return { projectName: p.project.name, baseCurrency: p.project.baseCurrency, displayName: m.displayName, status, canRename: p.project.membersCanRename, alreadyMemberProjectId: already ? p.project.id : null };
       }),
     acceptMemberInvite: (body, o) => {
       const projectId = body.token.split(".")[0] ?? "";
@@ -1195,6 +1208,7 @@ export function createMockApi(): MockApi {
         const entry = Object.entries(p?.memberInvites ?? {}).find(([, v]) => v.token === body.token);
         const m = entry && p ? ph(p, entry[0]) : undefined;
         if (!p || !entry || !m) fail(404, "INVITE_INVALID", "This invitation link isn't valid anymore.");
+        if (entry[1].claimed) fail(409, "INVITE_INVALID", "This invitation was already used.", undefined, { status: "CLAIMED" });
         if (new Date(m.inviteExpiresAt ?? 0).getTime() < Date.now()) fail(409, "INVITE_INVALID", "This invitation has expired.", undefined, { status: "EXPIRED" });
         const email = entry[1].email;
         let pr = Object.values(state.principals).find((x) => x.email === email);
@@ -1386,7 +1400,7 @@ export function createMockApi(): MockApi {
         if (i.state === "SENT") return;
         if (i.state !== "PROPOSED" && i.state !== "DISPUTED") fail(409, "INVALID_TRANSITION", "This transfer is already confirmed.");
         Object.assign(i, { state: "SENT", sentAt: now(), revision: i.revision + 1 });
-        log(p, m.id, "INSTRUCTION_SENT", r.round.id, i.id, `${m.displayName} sent ${nameOf(p, i.toMemberId)} their repayment`);
+        log(p, m.id, "INSTRUCTION_SENT", r.round.id, i.id, `${party(p, i.fromMemberId, m)} sent ${nameOf(p, i.toMemberId)} their repayment${by(i.fromMemberId, m)}`);
       }),
     markReceived: (id, roundId, iid, _body, o) =>
       mutate(o, id, "INSTRUCTION_CONFIRMED", () => {
@@ -1401,7 +1415,7 @@ export function createMockApi(): MockApi {
         if (i.state === "CONFIRMED") return;
         if (i.state !== "SENT") fail(409, "INVALID_TRANSITION", "The sender hasn't marked this as sent yet.");
         Object.assign(i, { state: "CONFIRMED", confirmedAt: now(), revision: i.revision + 1 });
-        log(p, m.id, "INSTRUCTION_CONFIRMED", r.round.id, i.id, `${m.displayName} confirmed receipt from ${nameOf(p, i.fromMemberId)}`);
+        log(p, m.id, "INSTRUCTION_CONFIRMED", r.round.id, i.id, `${party(p, i.toMemberId, m)} confirmed receipt from ${nameOf(p, i.fromMemberId)}${by(i.toMemberId, m)}`);
         if (r.instructions.every((x) => x.state === "CONFIRMED")) {
           r.round.status = "SETTLED";
           r.round.settledAt = now();
@@ -1419,7 +1433,7 @@ export function createMockApi(): MockApi {
         if (!stands(i.toMemberId)) fail(403, "FORBIDDEN", "Only the recipient can dispute receipt.");
         if (i.state !== "SENT") fail(409, "INVALID_TRANSITION", "Only a sent transfer can be disputed.");
         Object.assign(i, { state: "DISPUTED", disputedAt: now(), disputeNote: body.note ?? null, revision: i.revision + 1 });
-        log(p, m.id, "INSTRUCTION_DISPUTED", r.round.id, i.id, `${m.displayName} hasn't received the repayment from ${nameOf(p, i.fromMemberId)}`);
+        log(p, m.id, "INSTRUCTION_DISPUTED", r.round.id, i.id, `${party(p, i.toMemberId, m)} hasn't received the repayment from ${nameOf(p, i.fromMemberId)}${by(i.toMemberId, m)}`);
       }),
 
     startRound: (id, o) =>
