@@ -84,7 +84,7 @@ export interface Api {
   /** Account-level default name; null clears it. */
   updateMe(body: UpdateMeBody, o: MutationOptions): Promise<MeDTO>;
   getDeletionPreview(): Promise<DeletionPreviewDTO>;
-  /** 409 ACCOUNT_HAS_OPEN_TRANSFERS while any joined group has unconfirmed transfers. Clears the session. */
+  /** 409 ACCOUNT_HAS_OPEN_TRANSFERS while any joined group has collecting expense references or unconfirmed transfers. Clears the session. */
   deleteAccount(body: DeleteAccountBody, o: MutationOptions): Promise<void>;
 
   listProjects(): Promise<ProjectSummaryDTO[]>;

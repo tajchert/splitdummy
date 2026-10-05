@@ -102,7 +102,7 @@ accountRoutes.delete("/api/me", async (c) => {
 
   const { blockingProjects } = preview(states);
   if (blockingProjects.length > 0) {
-    throw new ApiError("ACCOUNT_HAS_OPEN_TRANSFERS", "Confirm your open transfers before deleting your account.", {
+    throw new ApiError("ACCOUNT_HAS_OPEN_TRANSFERS", "Settle your expenses and confirm your transfers before deleting your account.", {
       details: { projects: blockingProjects },
     });
   }

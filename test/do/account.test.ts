@@ -169,7 +169,7 @@ describe("account deletion ops", () => {
   it("anonymizing while collecting makes the member LEFT and drops them from readiness", async () => {
     const g = await createGroup({ members: 2 });
     const [bob, carol] = g.members as [Client, Client];
-    await bob.ok("createEntry", { roundId: g.roundId }, expense(bob.memberId, [bob.memberId, carol.memberId], "500"));
+    await g.owner.ok("createEntry", { roundId: g.roundId }, expense(g.owner.memberId, [g.owner.memberId, carol.memberId], "500"));
     await bob.ok("setReadiness", { roundId: g.roundId }, { ready: true });
     await carol.ok("setReadiness", { roundId: g.roundId }, { ready: true });
     await anonymize(bob);
@@ -180,8 +180,94 @@ describe("account deletion ops", () => {
     expect(view.current.readiness.find((r) => r.memberId === carol.memberId)?.ready).toBe(true);
     const ready = await sqlIn<{ ready: number }>(g.stub, "SELECT ready FROM readiness WHERE member_id = ?", bob.memberId);
     expect(ready[0]!.ready).toBe(0);
-    expect(view.current.balances.find((b) => b.memberId === bob.memberId)?.net).toBe("250");
+    expect(view.current.balances.find((b) => b.memberId === bob.memberId)?.net).toBe("0");
     expect(view.current.entries).toHaveLength(1);
+  });
+
+  it.each(["sender", "recipient", "zero net"])("blocks deletion with collecting expenses: %s", async (role) => {
+    const g = await createGroup();
+    const bob = g.members[0]!;
+    const payer = role === "sender" ? g.owner : bob;
+    await payer.ok("createEntry", { roundId: g.roundId }, expense(payer.memberId, [g.owner.memberId, bob.memberId], "1000"));
+    if (role === "zero net") {
+      await g.owner.ok("createEntry", { roundId: g.roundId }, expense(g.owner.memberId, [g.owner.memberId, bob.memberId], "1000"));
+    }
+    expect((await info(bob)).body).toMatchObject({ hasOpenTransfers: true });
+    expect(await errorCode(anonymize(bob))).toMatchObject({ status: 409, code: "ACCOUNT_HAS_OPEN_TRANSFERS" });
+    expect((await g.owner.view()).members.find((m) => m.id === bob.memberId)?.accountDeleted).toBe(false);
+    const frozen = await freezeNow(g);
+    await settleAll(g, frozen);
+    expect((await anonymize(bob)).status).toBe(200);
+    expect((await g.owner.ok("startRound"))).toHaveProperty("id");
+  });
+
+  it("allows deletion after the last collecting expense reference is deleted", async () => {
+    const g = await createGroup();
+    const bob = g.members[0]!;
+    const entry = await ownerPaysForAll(g);
+    expect((await info(bob)).body).toMatchObject({ hasOpenTransfers: true });
+    await g.owner.ok("deleteEntry", { roundId: g.roundId, entryId: entry.id }, { expectedRevision: entry.revision });
+    expect((await info(bob)).body).toMatchObject({ hasOpenTransfers: false });
+    expect((await anonymize(bob)).status).toBe(200);
+    expect((await freezeNow(g)).instructions).toEqual([]);
+  });
+
+  it("anonymizes removed memberships and their historical names", async () => {
+    const g = await createGroup();
+    const bob = g.members[0]!;
+    await g.owner.ok("removeMember", { memberId: bob.memberId });
+    expect((await info(bob)).body).toMatchObject({ role: "MEMBER" });
+    expect((await anonymize(bob)).status).toBe(200);
+    const rows = await sqlIn<{ display_name: string; principal_id: string; account_deleted: number }>(g.stub, "SELECT * FROM members WHERE id = ?", bob.memberId);
+    expect(rows[0]).toMatchObject({ display_name: "Deleted account", account_deleted: 1 });
+    expect(rows[0]!.principal_id).not.toBe(bob.principal!.principalId);
+    expect(JSON.stringify(await history(g))).not.toContain("Bob");
+  });
+
+  it("removes historical audit names while preserving financial details and unrelated members", async () => {
+    const g = await createGroup();
+    const bob = g.members[0]!;
+    await bob.ok("renameMe", {}, { displayName: "Robert" });
+    const entry = await bob.ok<EntryDTO>("createEntry", { roundId: g.roundId }, expense(bob.memberId, [g.owner.memberId, bob.memberId], "1000"));
+    const frozen = await freezeNow(g);
+    const transfer = frozen.instructions[0]!;
+    await g.owner.ok("markSent", { roundId: g.roundId, instructionId: transfer.id }, {});
+    await bob.ok("markDisputed", { roundId: g.roundId, instructionId: transfer.id }, { note: "Still pending" });
+    await settleAll(g, frozen);
+    const before = await history(g);
+    await anonymize(bob);
+    const after = await history(g);
+    expect(JSON.stringify(after)).not.toContain("Bob");
+    expect(JSON.stringify(after)).not.toContain("Robert");
+    const beforeEntry = before.events.find((e) => e.action === "ENTRY_CREATED")!;
+    const afterEntry = after.events.find((e) => e.id === beforeEntry.id)!;
+    expect(afterEntry.details).toEqual(beforeEntry.details);
+    expect(afterEntry.entityId).toBe(entry.id);
+    const transferEvents = after.events.filter((e) => e.action.startsWith("INSTRUCTION_"));
+    expect(transferEvents).toHaveLength(4);
+    for (const event of transferEvents) {
+      expect(event.summary).toContain("5.00 PLN");
+      expect(event.summary).toContain("Alice");
+      expect(event.summary).toContain("Deleted account");
+    }
+    expect(after.events.find((e) => e.action === "INSTRUCTION_DISPUTED")?.details).toEqual({ note: "Still pending" });
+    expect(after.events.find((e) => e.action === "ROUND_FROZEN")?.summary).toContain("Alice");
+    expect((await g.owner.view()).members.find((m) => m.id === g.owner.memberId)?.displayName).toBe("Alice");
+  });
+
+  it("rejects new financial references to a deleted member", async () => {
+    const g = await createGroup();
+    const bob = g.members[0]!;
+    const entry = await ownerPaysForAll(g);
+    await settleAll(g, await freezeNow(g));
+    await anonymize(bob);
+    const next = await g.owner.ok<{ id: string }>("startRound");
+    expect(await errorCode(g.owner.call("createEntry", { roundId: next.id }, expense(bob.memberId, [g.owner.memberId], "1000")))).toMatchObject({ status: 422, field: "payerMemberId" });
+    expect(await errorCode(g.owner.call("createEntry", { roundId: next.id }, expense(g.owner.memberId, [bob.memberId], "1000")))).toMatchObject({ status: 422, field: "participants.0.memberId" });
+    expect(await errorCode(g.owner.call("createAdjustment", { roundId: next.id }, {
+      correctedRoundId: g.roundId, correctedEntryId: entry.id, description: "Correction", occurredAt: "2026-10-01",
+      effects: [{ memberId: bob.memberId, baseAmount: "100" }, { memberId: g.owner.memberId, baseAmount: "-100" }],
+    }))).toMatchObject({ status: 422, field: "effects.0.memberId" });
   });
 
   it("refuses to anonymize the owner", async () => {

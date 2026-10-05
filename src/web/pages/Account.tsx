@@ -255,13 +255,13 @@ export function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
             <Banner tone="red" icon="warning" role="alert">
               You can't delete your account yet
               <p>
-                You still have transfers to send or confirm in {preview.blockingProjects.map((g, i) => (
+                You still have unsettled expenses or transfers in {preview.blockingProjects.map((g, i) => (
                   <span key={g.id}>
                     {i > 0 && ", "}
                     {groupLink(g)}
                   </span>
                 ))}
-                . Once they're confirmed, you can delete your account.
+                . Once the round is frozen and your transfers are confirmed, you can delete your account.
               </p>
             </Banner>
           )}
@@ -295,7 +295,7 @@ export function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
                   <li key={g.id}>
                     <Icon name="person_off" size={16} className="muted" />
                     <span className="grow">{g.name}</span>
-                    {preview.blockingProjects.some((b) => b.id === g.id) && <span className="tiny danger-text strong">Open transfers</span>}
+                    {preview.blockingProjects.some((b) => b.id === g.id) && <span className="tiny danger-text strong">Unsettled expenses or transfers</span>}
                   </li>
                 ))}
               </ul>

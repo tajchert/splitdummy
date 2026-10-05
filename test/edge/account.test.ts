@@ -217,6 +217,35 @@ describe("account deletion", () => {
     expect(await count("SELECT COUNT(*) AS n FROM project_directory WHERE principal_id = ?", annId)).toBe(0);
   });
 
+  it("blocks collecting expenses before deleting any owned groups", async () => {
+    const owner = await signIn(uniqueEmail("owner"));
+    const bob = await signIn(uniqueEmail("bob"));
+    const owned = await createGroup(bob, "Bob's group", "Bob");
+    const joined = await createGroup(owner, "Trip", "Alice");
+    const member = await join(owner, joined.project.id, "Bob", bob);
+    await json(await call(`/api/projects/${joined.project.id}/rounds/${joined.current.round.id}/entries`, {
+      cookie: owner,
+      body: { type: "EXPENSE", description: "Dinner", occurredAt: "2026-10-01", originalAmount: "1000", originalCurrency: "PLN", conversion: { method: "IDENTITY" }, payerMemberId: joined.me.memberId, splitMode: "EQUAL", participants: [{ memberId: joined.me.memberId }, { memberId: member.memberId }] },
+    }), 201);
+    expect((await preview(bob)).blockingProjects).toEqual([{ id: joined.project.id, name: "Trip" }]);
+    expect((await deleteAccount(bob)).status).toBe(409);
+    expect((await view(bob, owned.project.id)).project.id).toBe(owned.project.id);
+    expect((await me(bob)).principalId).toBeTruthy();
+  });
+
+  it("anonymizes removed memberships through account deletion", async () => {
+    const owner = await signIn(uniqueEmail("owner"));
+    const bob = await signIn(uniqueEmail("bob"));
+    const group = await createGroup(owner, "Trip", "Alice");
+    const member = await join(owner, group.project.id, "Bob", bob);
+    await json(await call(`/api/projects/${group.project.id}/members/${member.memberId}`, { method: "DELETE", cookie: owner }));
+    expect(await json(await deleteAccount(bob))).toEqual({ ok: true });
+    const after = await view(owner, group.project.id);
+    expect(after.members.find((m) => m.id === member.memberId)).toMatchObject({ displayName: "Deleted account", accountDeleted: true });
+    const events = await json<HistoryDTO>(await call(`/api/projects/${group.project.id}/history`, { cookie: owner }));
+    expect(JSON.stringify(events)).not.toContain("Bob");
+  });
+
   it("is safe to retry after failing midway", async () => {
     const ann = await signIn(uniqueEmail("ann"));
     const owned = await createGroup(ann, "Trip", "Ann");

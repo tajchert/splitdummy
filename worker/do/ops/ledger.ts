@@ -42,7 +42,7 @@ interface PreparedEntry {
 
 function liveMember(tx: Tx, memberId: string): MemberRow | undefined {
   const m = tx.store.member(memberId);
-  return m && m.status !== "REMOVED" ? m : undefined;
+  return m && m.status !== "REMOVED" && m.account_deleted !== 1 ? m : undefined;
 }
 
 const COMPUTE_ERRORS: Record<EntryComputationError, [field: string, message: string]> = {

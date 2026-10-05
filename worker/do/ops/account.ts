@@ -1,7 +1,8 @@
 /** Account deletion support: the edge asks each project what deleting this principal means there. */
 import type { OkDTO } from "@shared/api";
 import { conflict, forbidden, notFound, unauthenticated } from "../errors";
-import type { MemberRow } from "../store";
+import { money } from "../format";
+import type { AuditRow, MemberRow } from "../store";
 import type { Tx } from "../tx";
 import type { DoResponse } from "../types";
 import type { SnapshotData } from "../views";
@@ -16,16 +17,29 @@ export interface AccountDeletionInfo {
   hasOpenTransfers: boolean;
 }
 
-/** The principal's current, non-removed membership (undefined when there is none). */
+/** The principal's membership, including removed members awaiting anonymization (undefined when there is none). */
 function membership(tx: Tx): MemberRow | undefined {
   if (!tx.principal) throw unauthenticated();
   tx.requireProject();
   const m = tx.store.memberByPrincipal(tx.principal.principalId);
-  return m && m.status !== "REMOVED" && m.account_deleted !== 1 ? m : undefined;
+  return m && m.account_deleted !== 1 ? m : undefined;
 }
 
-/** Any unconfirmed transfer in a settling round where the member sends or receives. */
+/**
+ * Settling transfers and collecting ledger references both require a live account.
+ * Even a zero net can change when another expense is edited or deleted before freeze.
+ */
 function hasOpenTransfers(tx: Tx, memberId: string): boolean {
+  const round = tx.activeRound();
+  if (round?.status === "COLLECTING" && tx.store.count(
+    `SELECT COUNT(*) AS n FROM entries e WHERE e.round_id = ?1 AND e.deleted = 0 AND (
+       e.payer_member_id = ?2
+       OR EXISTS (SELECT 1 FROM contributions c WHERE c.entry_id = e.id AND c.member_id = ?2)
+       OR EXISTS (SELECT 1 FROM allocations a WHERE a.entry_id = e.id AND a.member_id = ?2)
+       OR EXISTS (SELECT 1 FROM adjustment_effects x WHERE x.entry_id = e.id AND x.member_id = ?2))`,
+    round.id,
+    memberId,
+  ) > 0) return true;
   return (
     tx.store.count(
       `SELECT COUNT(*) AS n FROM instructions i JOIN rounds r ON r.id = i.round_id
@@ -69,7 +83,7 @@ export function anonymizeMember(tx: Tx): DoResponse {
     throw conflict("INVALID_TRANSITION", "The owner's group is deleted with the account, not anonymized.");
   }
   if (hasOpenTransfers(tx, me.id)) {
-    throw conflict("ACCOUNT_HAS_OPEN_TRANSFERS", "Confirm your open transfers before deleting your account.", {
+    throw conflict("ACCOUNT_HAS_OPEN_TRANSFERS", "Settle your expenses and confirm your transfers before deleting your account.", {
       projects: [{ id: project.id, name: project.name }],
     });
   }
@@ -98,7 +112,36 @@ export function anonymizeMember(tx: Tx): DoResponse {
     entry.displayName = DELETED_ACCOUNT_NAME;
     tx.store.run("UPDATE settlement_snapshots SET snapshot_json = ? WHERE round_id = ?", JSON.stringify(snap), row.round_id);
   }
+  anonymizeAudit(tx, me.id);
   tx.audit("MEMBER_ACCOUNT_DELETED", "A member deleted their account", { roundId: round?.id ?? null, entityId: me.id });
   tx.disconnect.push(me.id);
   return ok(OK);
+}
+
+/** Redact system-generated identity labels, keeping action, IDs and financial details. */
+function anonymizeAudit(tx: Tx, memberId: string): void {
+  const events = tx.store.all<AuditRow>(
+    `SELECT * FROM audit_events WHERE actor_member_id = ?1 OR entity_id = ?1
+       OR entity_id IN (SELECT id FROM instructions WHERE from_member_id = ?1 OR to_member_id = ?1)`,
+    memberId,
+  );
+  for (const event of events) {
+    let summary = `Activity involving a deleted account: ${event.action.toLowerCase().replaceAll("_", " ")}`;
+    let details = event.details_json;
+    if (event.action === "MEMBER_RENAMED" && event.entity_id === memberId) {
+      details = JSON.stringify({ from: DELETED_ACCOUNT_NAME, to: DELETED_ACCOUNT_NAME });
+    }
+    // Transfer amounts have no duplicate in audit details; retain them in the label.
+    const instruction = event.entity_id && event.action.startsWith("INSTRUCTION_")
+      ? tx.store.instruction(event.entity_id) : undefined;
+    if (instruction) {
+      const from = tx.store.member(instruction.from_member_id)!.display_name;
+      const to = tx.store.member(instruction.to_member_id)!.display_name;
+      const amount = money(instruction.amount, instruction.exponent, instruction.currency);
+      if (event.action === "INSTRUCTION_SENT") summary = `${from} sent ${amount} to ${to}`;
+      if (event.action === "INSTRUCTION_CONFIRMED") summary = `${to} received ${amount} from ${from}`;
+      if (event.action === "INSTRUCTION_DISPUTED") summary = `${to} has not received ${amount} from ${from}`;
+    }
+    tx.store.run("UPDATE audit_events SET summary = ?, details_json = ? WHERE id = ?", summary, details, event.id);
+  }
 }
