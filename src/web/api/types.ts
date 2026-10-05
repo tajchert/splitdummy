@@ -3,6 +3,7 @@ import type {
   AcceptMemberInviteSchema,
   AddMemberResultDTO,
   AddMemberSchema,
+  AttachmentDTO,
   AdjustmentInputSchema,
   ApiKeyDTO,
   CreatedApiKeyDTO,
@@ -135,6 +136,10 @@ export interface Api {
   updateEntry(projectId: string, roundId: string, entryId: string, body: UpdateEntryBody, o: MutationOptions): Promise<void>;
   deleteEntry(projectId: string, roundId: string, entryId: string, body: DeleteEntryBody, o: MutationOptions): Promise<void>;
   createAdjustment(projectId: string, roundId: string, body: AdjustmentBody, o: MutationOptions): Promise<void>;
+  /** Uploads one compressed photo. It stays private to you until an entry save lists it in attachmentIds. */
+  uploadAttachment(projectId: string, image: Blob, o: MutationOptions): Promise<AttachmentDTO>;
+  /** Same-origin URL for <img src>; the session cookie authenticates it. */
+  attachmentUrl(projectId: string, attachmentId: string): string;
 
   setReadiness(projectId: string, roundId: string, body: ReadinessBody, o: MutationOptions): Promise<void>;
   getReview(projectId: string, roundId: string): Promise<ReviewDTO>;

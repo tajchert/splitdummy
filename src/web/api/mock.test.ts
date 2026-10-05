@@ -50,3 +50,30 @@ describe("mock member invites", () => {
     expect(JSON.stringify(h)).toContain("Kid sent Lea their repayment (marked by Lea)");
   });
 });
+
+describe("mock photos", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    window.history.replaceState(null, "", "/?latency=0");
+  });
+
+  it("links an uploaded photo, keeps it when an update omits it, and rejects someone else's upload", async () => {
+    const api = as("pr_maya");
+    const view = await api.getProject("p_lisbon");
+    const round = view.current.round.id;
+    const photo = await api.uploadAttachment("p_lisbon", new Blob(["x"], { type: "image/webp" }), o());
+    expect(api.attachmentUrl("p_lisbon", photo.id)).toBeTruthy();
+    const body = {
+      type: "EXPENSE" as const, description: "Taxi", occurredAt: "2026-09-20", originalAmount: "1500", originalCurrency: view.project.baseCurrency,
+      conversion: { method: "IDENTITY" as const }, payerMemberId: view.me.memberId, splitMode: "EQUAL" as const,
+      participants: [{ memberId: view.me.memberId }],
+    };
+    await api.createEntry("p_lisbon", round, { ...body, note: "Airport", attachmentIds: [photo.id] }, o());
+    let entry = (await api.getProject("p_lisbon")).current.entries.find((e) => e.description === "Taxi")!;
+    expect(entry).toMatchObject({ note: "Airport", attachments: [{ id: photo.id }] });
+    await api.updateEntry("p_lisbon", round, entry.id, { ...body, expectedRevision: entry.revision }, o());
+    entry = (await api.getProject("p_lisbon")).current.entries.find((e) => e.id === entry.id)!;
+    expect(entry.attachments.map((a) => a.id)).toEqual([photo.id]);
+    await expect(api.createEntry("p_lisbon", round, { ...body, attachmentIds: ["att_missing"] }, o())).rejects.toMatchObject({ status: 422, field: "attachmentIds.0" });
+  });
+});
