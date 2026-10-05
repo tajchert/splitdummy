@@ -33,7 +33,7 @@ File storage row). OCR stays deferred.
 ALTER TABLE entries ADD COLUMN note TEXT;                 -- NULL when no note
 
 CREATE TABLE attachments (
-  id TEXT PRIMARY KEY,                                    -- 'a_' prefix
+  id TEXT PRIMARY KEY,                                    -- 'att_' prefix ('a_' is taken by audit events)
   entry_id TEXT REFERENCES entries(id),                   -- NULL while pending
   uploader_member_id TEXT NOT NULL REFERENCES members(id),
   content_type TEXT NOT NULL CHECK (content_type IN ('image/webp','image/jpeg')),
@@ -74,12 +74,12 @@ after the R2 delete is acknowledged (see Lifecycle).
 | Note | ≤ 1000 characters after trim |
 | Pending TTL | 24 h |
 
-Exceeding a count limit → `LIMIT_EXCEEDED` (422, existing convention).
+Exceeding a count limit → `LIMIT_EXCEEDED` via the DO's `limitExceeded()` (429, existing DO convention).
 
 ## Contracts (`src/shared/api.ts`, additive only)
 
 ```ts
-export const NoteSchema = z.string().trim().max(1000).transform((s) => (s === "" ? null : s));
+export const NoteSchema = z.string().trim().max(1000); // "" → null is normalized in the DO (no zod transform, so OpenAPI input schemas stay representable)
 // EntryInputSchema gains:
 note: NoteSchema.nullable().optional(),
 attachmentIds: z.array(IdSchema).max(5).refine(unique).optional(),
@@ -110,20 +110,23 @@ Semantics:
 
 Raw image body (not JSON). Edge pipeline:
 
-1. `requireSession`, `originGuard` (mutating), `validateParams`, `enforceLimit(RL_UPLOAD)` (new limiter,
-   30/min per principal; prod + staging namespaces).
-2. `Content-Type` must be `image/webp` or `image/jpeg`; `Content-Length` required and ≤ `MAX_ATTACHMENT_BYTES`;
-   body read with the same cap (reject if it overruns).
+1. `requireSession`, `originGuard` (mutating), `validateParams`, `requireIdempotencyKey`, `enforceLimit(RL_UPLOAD)`
+   (new limiter, 30/min per principal; prod + staging namespaces).
+2. `Content-Type` must be `image/webp` or `image/jpeg`; a declared `Content-Length` over `MAX_ATTACHMENT_BYTES` is
+   rejected up front, and the streaming read enforces the same cap (413 if it overruns).
 3. Magic bytes must match the declared type (`RIFF....WEBP` / `FF D8 FF`). Width/height parsed from the header
    (JPEG SOFn; WebP VP8/VP8L/VP8X); must be within limits.
 4. Strip metadata: JPEG drops APP1 (EXIF/XMP) and APP13 segments; WebP drops `EXIF`/`XMP ` chunks and clears the
    matching VP8X flags. Pure functions in `worker/lib/image.ts`.
-5. DO op `registerAttachment` (mutation): active member check, pending and project quotas, inserts the pending
-   row, audit-free. Returns `{ id }`.
-6. `ATTACHMENTS.put(key, strippedBytes)`. If the put fails, return 500; the orphan pending row is purged by TTL.
+5. DO op `registerAttachment` (mutation, idempotent like every group mutation): member check, collecting round,
+   pending and project quotas, inserts the pending row (metadata + SHA-256 of the stripped bytes in the request).
+   No audit, no version bump, no broadcast (a pending upload is private to its uploader). Returns `AttachmentDTO`.
+6. `ATTACHMENTS.put(key, strippedBytes)`. If the put fails, return 500. A retry with the same `Idempotency-Key`
+   replays the same id and puts the bytes again, which repairs it; an abandoned row is purged by the TTL.
 7. `201` with `AttachmentDTO`.
 
-No idempotency key: retries create a new pending upload; the old one expires.
+The server-side strip also drops EXIF orientation; the browser path is already upright, and the API docs tell API
+clients to upload upright images.
 
 ### `GET /api/projects/:projectId/attachments/:attachmentId`
 
@@ -144,13 +147,16 @@ Both endpoints are under `/api/projects/*`, so they join the public API allowlis
 After the existing checks (member, collecting round, `editableEntry`, revision):
 
 - Each id in `attachmentIds` must exist in this project and be either pending with
-  `uploader_member_id = me.id`, or already linked to this entry. Otherwise `VALIDATION` (422)
-  ("This photo isn't available.").
+  `uploader_member_id = me.id`, or already linked to this entry. Otherwise `VALIDATION` (422) with field
+  `attachmentIds.<index>` ("This photo isn't available. Remove it and add it again.").
 - Linked ids not in the new list → moved to `attachment_trash`.
 - New ids → `entry_id`, `attached_at`, `position` set.
 - `note` written to `entries.note`.
 - A note-only or photo-only change is a normal edit: bumps `revision`, writes `ENTRY_UPDATED` audit with
-  before/after `entryDto` (which now includes `note` and `attachments`).
+  before/after `entryDto` (which now includes `note` and `attachments`). The audit summary gains fragments such as
+  "· changed the note · added 2 photos", which is what the entry's Changes list and History show.
+- Frozen rounds read entries from their settlement snapshot; snapshots written before this feature lack the new
+  fields, so the read path fills `note: null, attachments: []`.
 
 ### `deleteEntry`
 
@@ -164,14 +170,13 @@ Soft-deletes as today, and moves all of the entry's attachments to `attachment_t
   2. Edge deletes `projects/<projectId>/attachments/<id>` for those ids from R2 (batched).
   3. DO op `ackAttachmentTrash { ids }` removes the trash rows.
   A failed R2 delete leaves the trash rows; the next night retries.
-- **Group deletion** (`forgetProject` in `worker/routes/account.ts` and wherever a project is deleted): delete
-  the `projects/<projectId>/attachments/` prefix in `ATTACHMENTS`, always (not gated on the owner-only backups
-  flag, since the photos belong to the deleted group).
+- **Group deletion** (`forgetProject` in `worker/routes/account.ts`): delete the `projects/<projectId>/attachments/`
+  prefix in `ATTACHMENTS` on the same owner-deletion path that deletes the group's backups.
 - **Account deletion:** photos stay with the group, like the person's entries; uploader is anonymized by the
   existing member anonymization.
 - **Backups:** `backupSnapshot` includes the `attachments` and `attachment_trash` metadata rows; image bytes are
   not backed up.
-- **CSV export:** adds `Note` and `Photos` (count) columns.
+- **CSV export:** appends `note` and `photo_count` columns (snake_case like the existing header).
 
 ## Web
 
@@ -182,7 +187,8 @@ Soft-deletes as today, and moves all of the entry's attachments to `attachment_t
 1. Decode with orientation applied (`createImageBitmap(file, { imageOrientation: "from-image" })`, falling back
    to an `<img>` decode).
 2. Scale so the long edge ≤ 2000 px (never upscale).
-3. Encode WebP q0.8. If the produced `blob.type` isn't `image/webp`, encode JPEG q0.82.
+3. Encode WebP q0.8 on a white background (so transparent PNG screenshots don't turn black in JPEG). If the
+   produced `blob.type` isn't `image/webp`, encode JPEG q0.82 and stay on JPEG for later steps.
 4. If > 900 KB: retry at q0.7, then q0.6, then long edge 1600 px at q0.7. Return the first that fits; if none
    fits, return the smallest (server cap is 1.5 MB).
 5. Undecodable input → typed error the UI maps to "Couldn't read this image — try a JPEG or PNG."
@@ -198,18 +204,20 @@ Encoder/decoder are injectable for tests (jsdom has no canvas).
 - Save waits for in-flight uploads ("Uploading photos…"); a failed tile blocks save until retried or removed.
   Payload includes `note` and `attachmentIds` (tile order).
 - Drafts (`src/web/lib/drafts.ts`) persist `note` and uploaded `attachmentIds` (ids only).
-- Read-only when the round isn't collecting, like the rest of the form.
+- When the round isn't collecting the form isn't shown at all (existing behaviour).
+- A tile whose server image fails to load (e.g. a draft's pending upload expired) shows "This photo is no longer
+  available" with Remove; a save error on `attachmentIds.<n>` marks that tile.
 
 ### Expense detail (`src/web/pages/group/EntryDetail.tsx`)
 
 - Note as plain text, line breaks preserved (`white-space: pre-wrap`), no markdown/linkify.
 - Photo row: square thumbnails (`object-fit: cover`), tap → full-screen viewer with prev/next (buttons, swipe,
-  arrow keys), Esc/close, "Open full size" link. Focus trapped while open.
+  arrow keys), Esc/close, "Open full size" link. Built on a second `<dialog>.showModal()` stacked above the detail Sheet (the browser traps focus; Escape closes only the viewer).
 
 ### Elsewhere
 
 - List row (`src/web/pages/group/parts.tsx` `EntryRow`): small paperclip / note indicator when present.
-- History (`src/web/lib/reviewDiff.ts`): "changed the note", "added 2 photos", "removed a photo".
+- History and the entry's Changes list show the audit summary fragments from the DO (see Linking).
 - Mock API (`src/web/api/mock.ts`): fake uploads backed by object URLs.
 
 ## Privacy, logging, docs
@@ -233,12 +241,13 @@ Encoder/decoder are injectable for tests (jsdom has no canvas).
   PATCH omit semantics.
 - **DO** (`test/do/`): link own pending; reject another member's pending, another project's id, an id linked to
   another entry; > 5; frozen round; non-creator non-owner; PATCH omitted keeps / `[]` clears / reorder;
-  delete entry trashes photos; pending TTL → trash; take/ack cycle; quotas; audit details include note/attachments;
-  `readAttachment` visibility rules.
-- **edge** (`test/edge/`, Miniflare R2): upload type/magic mismatch, oversize, missing length, bad dimensions,
+  delete entry trashes photos; pending TTL → trash; take/ack cycle; quotas; audit details and summary;
+  `readAttachment` visibility rules; old frozen snapshots read with defaults.
+- **edge** (`test/edge/`, Miniflare R2): upload type/magic mismatch, oversize, bad dimensions, idempotent replay
+  repairing a failed put,
   non-member, removed member, cross-origin; metadata strip on fixture JPEG/WebP; GET access matrix and response
   headers; group deletion clears the prefix; cron purge.
 - **web:** `compressReceipt` with injected codec (fallback to JPEG, size-budget steps, no upscale, decode error);
-  `EntryForm` (tile states, save waits, failed tile blocks, draft restores ids, read-only when frozen);
-  `reviewDiff` lines.
+  white background before draw; `EntryForm` (tile states, save waits, failed tile blocks, draft restores ids,
+  server `attachmentIds.n` error marks the tile).
 - **Manual:** real bill photos from iOS Safari and Android Chrome — legibility of small print and resulting size.
