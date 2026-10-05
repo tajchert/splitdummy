@@ -4,11 +4,11 @@ import { ApiError } from "./errors";
 /** Upper bound for JSON request bodies (largest legit body is an entry with 100 participants). */
 export const MAX_JSON_BYTES = 64 * 1024;
 
-/** Reads a JSON body without buffering more than `limit` bytes. Empty body → undefined. */
-export async function readJsonBody(req: Request, limit = MAX_JSON_BYTES): Promise<unknown> {
+/** Reads a request body without buffering more than `limit` bytes (413 beyond it). No body → empty array. */
+export async function readBodyBytes(req: Request, limit: number): Promise<Uint8Array> {
   const declared = req.headers.get("content-length");
   if (declared !== null && Number(declared) > limit) throw tooLarge();
-  if (!req.body) return undefined;
+  if (!req.body) return new Uint8Array();
 
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -23,7 +23,6 @@ export async function readJsonBody(req: Request, limit = MAX_JSON_BYTES): Promis
     }
     chunks.push(value);
   }
-  if (size === 0) return undefined;
 
   const bytes = new Uint8Array(size);
   let offset = 0;
@@ -31,6 +30,13 @@ export async function readJsonBody(req: Request, limit = MAX_JSON_BYTES): Promis
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  return bytes;
+}
+
+/** Reads a JSON body without buffering more than `limit` bytes. Empty body → undefined. */
+export async function readJsonBody(req: Request, limit = MAX_JSON_BYTES): Promise<unknown> {
+  const bytes = await readBodyBytes(req, limit);
+  if (bytes.length === 0) return undefined;
   try {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch {

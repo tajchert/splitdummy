@@ -42,7 +42,8 @@
     { "name": "RL_CREATE_PROJECT", "namespace_id": "1003", "simple": { "limit": 5, "period": 60 } },
     { "name": "RL_JOIN", "namespace_id": "1004", "simple": { "limit": 10, "period": 60 } },
     { "name": "RL_MUTATION", "namespace_id": "1005", "simple": { "limit": 120, "period": 60 } },
-    { "name": "RL_CLIENT_ERROR", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } }
+    { "name": "RL_CLIENT_ERROR", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } },
+    { "name": "RL_UPLOAD", "namespace_id": "1007", "simple": { "limit": 30, "period": 60 } }
   ],
   // One data point per API request (endpoint, status, latency); no user identifiers.
   "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "splitdummy_requests" }],
@@ -69,7 +70,10 @@
       }
     ]
   },
-  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "splitdummy-backups" }],
+  "r2_buckets": [
+    { "binding": "BACKUPS", "bucket_name": "splitdummy-backups" },
+    { "binding": "ATTACHMENTS", "bucket_name": "splitdummy-attachments" }
+  ],
   "send_email": [{ "name": "EMAIL" }],
   "env": {
     "staging": {
@@ -91,7 +95,8 @@
         { "name": "RL_CREATE_PROJECT", "namespace_id": "2003", "simple": { "limit": 5, "period": 60 } },
         { "name": "RL_JOIN", "namespace_id": "2004", "simple": { "limit": 10, "period": 60 } },
         { "name": "RL_MUTATION", "namespace_id": "2005", "simple": { "limit": 120, "period": 60 } },
-        { "name": "RL_CLIENT_ERROR", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } }
+        { "name": "RL_CLIENT_ERROR", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_UPLOAD", "namespace_id": "2007", "simple": { "limit": 30, "period": 60 } }
       ],
       "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "splitdummy_staging_requests" }],
       "durable_objects": {
@@ -116,7 +121,10 @@
           }
         ]
       },
-      "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "splitdummy-staging-backups" }],
+      "r2_buckets": [
+        { "binding": "BACKUPS", "bucket_name": "splitdummy-staging-backups" },
+        { "binding": "ATTACHMENTS", "bucket_name": "splitdummy-staging-attachments" }
+      ],
       "send_email": [{ "name": "EMAIL" }]
     }
   }
