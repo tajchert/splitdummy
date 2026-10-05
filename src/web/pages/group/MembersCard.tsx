@@ -5,7 +5,7 @@ import { useApi } from "../../api/context";
 import { ApiError, errorMessage } from "../../api/errors";
 import { useSubmit } from "../../api/idempotency";
 import { ConfirmDialog, Sheet } from "../../components/Dialog";
-import { Field, Toggle } from "../../components/Field";
+import { Field, Select, Toggle } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 import { Avatar, Icon } from "../../components/ui";
 import { fmtDate } from "../../lib/format";
@@ -118,17 +118,14 @@ export function MembersCard({ view }: { view: ProjectViewDTO }) {
             <p className="tiny muted">The new owner needs an account with a verified email. Nobody else in the group has one yet.</p>
           ) : (
             <div className="inline-form">
-              <span className="select-wrap grow">
-                <select className="input select" aria-label="New owner" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
-                  <option value="">Choose a member…</option>
-                  {candidates.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.displayName}
-                    </option>
-                  ))}
-                </select>
-                <Icon name="expand_more" size={18} className="select-chevron" />
-              </span>
+              <Select wrapClassName="grow" aria-label="New owner" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
+                <option value="">Choose a member…</option>
+                {candidates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.displayName}
+                  </option>
+                ))}
+              </Select>
               <button type="button" className="btn btn-secondary btn-md" disabled={!transferTo} onClick={() => setConfirmTransfer(true)}>
                 Offer
               </button>

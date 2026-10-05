@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import type { InvitationDTO, ProjectViewDTO } from "@shared/api";
 import { DisplayNameSchema, ProjectNameSchema } from "@shared/api";
@@ -167,6 +167,7 @@ function CurrencySettings({ view }: { view: ProjectViewDTO }) {
   const foreign = view.current.round.status === "COLLECTING" ? view.current.entries.filter((e) => e.originalCurrency !== p.baseCurrency && e.type !== "ADJUSTMENT").length : 0;
   const [confirmMulti, setConfirmMulti] = useState<boolean | null>(null);
   const [base, setBase] = useState(p.baseCurrency);
+  const hintId = useId();
 
   const toggleBlocked = settling ? "Currency settings are locked while everyone settles up." : p.multiCurrencyEnabled && foreign > 0 ? `${foreign} ${foreign === 1 ? "entry in this round uses" : "entries in this round use"} another currency. Change or delete ${foreign === 1 ? "it" : "them"} before turning this off.` : null;
 
@@ -193,13 +194,19 @@ function CurrencySettings({ view }: { view: ProjectViewDTO }) {
           </b>
         </div>
         {owner && !p.baseCurrencyLocked && !settling ? (
-          <div className="inline-form">
-            <Field label="Change settlement currency" className="grow" hint="Possible only until the first entry is added.">
-              {(fp) => <CurrencySelect {...fp} value={base} onChange={setBase} />}
-            </Field>
-            <button type="button" className="btn btn-secondary btn-md" disabled={base === p.baseCurrency || m.pending} onClick={() => void applyBase()}>
-              Save
-            </button>
+          <div className="stack-8">
+            {/* The hint sits below the row: inside the Field it would push the select up and misalign Save. */}
+            <div className="inline-form">
+              <Field label="Change settlement currency" className="grow">
+                {(fp) => <CurrencySelect {...fp} aria-describedby={hintId} value={base} onChange={setBase} />}
+              </Field>
+              <button type="button" className="btn btn-secondary btn-md" disabled={base === p.baseCurrency || m.pending} onClick={() => void applyBase()}>
+                Save
+              </button>
+            </div>
+            <p id={hintId} className="field-hint">
+              Possible only until the first entry is added.
+            </p>
           </div>
         ) : (
           <p className="tiny muted meta-item">
