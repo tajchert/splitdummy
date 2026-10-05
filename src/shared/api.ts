@@ -462,6 +462,18 @@ export const FreezeScheduleSchema = z.object({
   timeZone: z.string().min(1).max(64),
 });
 
+/**
+ * POST /api/client-errors → 204. A browser-side crash, logged for debugging. Clients send no
+ * query string or fragment; the edge still redacts token-bearing paths and long opaque strings.
+ */
+export const ClientErrorReportSchema = z.object({
+  kind: z.enum(["error", "unhandledrejection", "render"]),
+  message: z.string().max(500),
+  stack: z.string().max(4000).optional(),
+  path: z.string().max(300),
+});
+export type ClientErrorReport = z.infer<typeof ClientErrorReportSchema>;
+
 /** DELETE /api/me → OkDTO (clears session cookie). Body must confirm. 409 ACCOUNT_HAS_OPEN_TRANSFERS when blocked. */
 export const DeleteAccountSchema = z.object({ confirm: z.literal("DELETE") });
 
@@ -557,6 +569,7 @@ export const ENDPOINTS = {
   history: "GET /api/projects/:projectId/history",
   export: "GET /api/projects/:projectId/export", // text/csv
   live: "GET /api/projects/:projectId/live", // WebSocket; server pushes LiveMessage
+  reportClientError: "POST /api/client-errors", // -> 204
 } as const;
 
 /** WebSocket server→client messages. Clients refetch on any `changed`; on reconnect always refetch. */

@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { reportClientError } from "../lib/errorReporting";
 import { Icon, Logo } from "./ui";
 
 /** Last-resort screen so a render or chunk-load error never leaves a blank page. */
@@ -7,6 +8,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
 
   static getDerivedStateFromError(error: Error) {
     return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    reportClientError("render", error);
   }
 
   render() {

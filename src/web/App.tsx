@@ -19,6 +19,7 @@ import { lazyPage } from "./lib/lazyPage";
 // Less frequent screens load on demand.
 const Account = lazyPage(() => import("./pages/Account"), "Account");
 const ApiDocs = lazyPage(() => import("./pages/ApiDocs"), "ApiDocs");
+const Privacy = lazyPage(() => import("./pages/Privacy"), "Privacy");
 const CreateGroup = lazyPage(() => import("./pages/CreateGroup"), "CreateGroup");
 const Join = lazyPage(() => import("./pages/Join"), "Join");
 const Invite = lazyPage(() => import("./pages/Invite"), "Invite");
@@ -46,6 +47,7 @@ export function AppRoutes() {
         <Route path="/auth/confirm" element={<AuthConfirm />} />
         <Route path="/account" element={<Account />} />
         <Route path="/docs/api" element={<ApiDocs />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/groups" element={<MyGroups />} />
         <Route path="/groups/new" element={<CreateGroup />} />
         <Route path="/join" element={<Join />} />

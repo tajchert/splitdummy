@@ -15,6 +15,7 @@ import { acceptMemberInvite, addMember, cancelMemberInvite, inviteMember, previe
 import { createAdjustment, createEntry, deleteEntry, setReadiness, updateEntry } from "./ops/ledger";
 import { backupSnapshot, exportCsv, getHistory, getProject, getReview, getRound } from "./ops/read";
 import { freeze, markDisputed, markReceived, markSent, scheduledFreeze, setFreezeSchedule, startRound } from "./ops/settlement";
+import { logError } from "../lib/log";
 import { migrate } from "./schema";
 import { Store } from "./store";
 import { Tx } from "./tx";
@@ -73,7 +74,7 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
     } catch (err) {
       if (err instanceof ApiError) return err.toResponse();
       // Never log request bodies: they hold private expense data.
-      console.error("ProjectDO op failed", { op: req.op, requestId: req.requestId, error: String(err) });
+      logError("ProjectDO op failed", err, { op: req.op, requestId: req.requestId });
       return {
         status: 500,
         body: { error: { code: "INTERNAL", message: "Something went wrong. Nothing was saved." } },
@@ -312,12 +313,12 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
       this.runScheduledFreeze();
     } catch (err) {
       freezeFailed = true;
-      console.error("scheduled freeze failed", { error: String(err) });
+      logError("scheduled freeze failed", err);
     }
     try {
       await this.publishOutbox();
     } catch (err) {
-      console.error("outbox publication failed", { error: String(err) });
+      logError("outbox publication failed", err);
     }
     await this.armAlarm(freezeFailed);
   }

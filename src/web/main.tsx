@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createHttpApi } from "./api/http";
 import type { Api } from "./api/types";
 import { App } from "./App";
+import { listenForErrors } from "./lib/errorReporting";
 import { listenForInstall } from "./lib/install";
 import { applyStoredTheme } from "./lib/theme";
 import { reloadForNewBuild } from "./lib/lazyPage";
@@ -26,6 +27,7 @@ async function chooseApi(): Promise<{ api: Api; devPanel?: ComponentType }> {
     const api = createMockApi();
     return { api, devPanel: api.DevPanel };
   }
+  listenForErrors();
   return { api: createHttpApi() };
 }
 

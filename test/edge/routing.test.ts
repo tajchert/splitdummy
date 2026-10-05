@@ -49,6 +49,7 @@ describe("project routing", () => {
       "inviteMember",
       "previewMemberInvite",
       "acceptMemberInvite",
+      "reportClientError",
     ];
     const mapped = Object.keys(PROJECT_ROUTES);
     expect([...edgeHandled, ...mapped].sort()).toEqual(Object.keys(ENDPOINTS).sort());
