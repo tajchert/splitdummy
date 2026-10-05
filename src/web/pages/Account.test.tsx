@@ -47,7 +47,8 @@ describe("delete account", () => {
     renderAt(api, "/account");
     const dialog = await openDialog();
     expect(await within(dialog).findByText("Porto weekend")).toBeTruthy();
-    expect(within(dialog).getByText("1 member")).toBeTruthy();
+    // Lea plus the two seeded placeholders (Kid, Nina); the DO counts placeholders too.
+    expect(within(dialog).getByText("3 members")).toBeTruthy();
     const button = within(dialog).getByRole("button", { name: "Delete account" }) as HTMLButtonElement;
     const input = within(dialog).getByLabelText("Type DELETE to confirm");
 

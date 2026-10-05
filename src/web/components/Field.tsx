@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, type ReactNode, type SelectHTMLAttributes } from "react";
 import { COMMON_CURRENCIES, CURRENCIES } from "@shared/money";
 import { currencyName } from "../lib/format";
 import { Icon } from "./ui";
@@ -50,8 +50,7 @@ export function CurrencySelect({ value, onChange, id, compact, exclude, ...aria 
   const common = COMMON_CURRENCIES.filter((c) => !exclude?.includes(c));
   const rest = [...CURRENCIES].filter((c) => !COMMON_CURRENCIES.includes(c.code) && !exclude?.includes(c.code)).sort((a, b) => a.code.localeCompare(b.code));
   return (
-    <span className={`select-wrap${compact ? " select-compact" : ""}`}>
-      <select id={id} className="input select" value={value} onChange={(e) => onChange(e.target.value)} {...aria}>
+    <Select wrapClassName={compact ? "select-compact" : undefined} id={id} value={value} onChange={(e) => onChange(e.target.value)} {...aria}>
         <optgroup label="Common">
           {common.map((c) => (
             <option key={c} value={c}>
@@ -66,6 +65,16 @@ export function CurrencySelect({ value, onChange, id, compact, exclude, ...aria 
             </option>
           ))}
         </optgroup>
+    </Select>
+  );
+}
+
+/** The app's dropdown: a native <select> styled like an input, with our chevron. Every select renders through this. */
+export function Select({ wrapClassName, className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & { wrapClassName?: string }) {
+  return (
+    <span className={`select-wrap${wrapClassName ? " " + wrapClassName : ""}`}>
+      <select {...rest} className={`input select${className ? " " + className : ""}`}>
+        {children}
       </select>
       <Icon name="expand_more" size={18} className="select-chevron" />
     </span>

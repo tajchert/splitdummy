@@ -4,6 +4,7 @@
  * Seeded with the design's "Lisbon trip" demo; you are Maya, the owner.
  */
 import type {
+  AddMemberResultDTO,
   ApiKeyDTO,
   AuditEventDTO,
   BalanceDTO,
@@ -15,6 +16,7 @@ import type {
   InvitationPreviewDTO,
   MeDTO,
   MemberDTO,
+  MemberInvitePreviewDTO,
   ProjectDTO,
   ProjectSummaryDTO,
   ProjectViewDTO,
@@ -24,6 +26,8 @@ import type {
   RoundViewDTO,
 } from "@shared/api";
 import {
+  AcceptMemberInviteSchema,
+  AddMemberSchema,
   CreateApiKeySchema,
   AdjustmentInputSchema,
   CreateProjectSchema,
@@ -31,6 +35,7 @@ import {
   EntryInputSchema,
   FreezeScheduleSchema,
   FreezeSchema,
+  InviteMemberSchema,
   JoinSchema,
   RenameMemberSchema,
   UpdateMeSchema,
@@ -60,6 +65,7 @@ interface MockProject {
   invitations: (InvitationDTO & { token: string })[];
   events: AuditEventDTO[];
   pendingOwnership: string | null;
+  memberInvites?: Record<string, { token: string; email: string }>; // memberId → live email invite
 }
 
 interface Principal {
@@ -198,7 +204,7 @@ function roundView(p: MockProject, r: MockRound): RoundViewDTO {
     }
     subs.set(e.originalCurrency, s);
   }
-  const active = p.members.filter((m) => m.status === "ACTIVE");
+  const active = p.members.filter((m) => m.status === "ACTIVE" && m.kind !== "PLACEHOLDER");
   return {
     round: { ...r.round },
     entries: r.entries.map((e) => ({ ...e })),
@@ -329,7 +335,7 @@ function runSchedule(p: MockProject): boolean {
   if (!r || r.round.status !== "COLLECTING" || !r.round.scheduledFreezeAt) return false;
   const at = r.round.scheduledFreezeAt;
   if (new Date(at).getTime() > Date.now()) return false;
-  const active = p.members.filter((m) => m.status === "ACTIVE");
+  const active = p.members.filter((m) => m.status === "ACTIVE" && m.kind !== "PLACEHOLDER");
   const notReady = active.filter((m) => !r.readiness[m.id]?.ready);
   freezeRound(p, r, null, notReady.length ? "Scheduled freeze date reached" : null, at);
   r.round.frozenBySchedule = true;
@@ -605,6 +611,13 @@ function seed(kind: Seed = "collecting"): State {
     { id: "inv_exp", token: "p_porto.demo-expired-token-01", createdAt: "2026-08-01T09:00:00.000Z", expiresAt: "2026-08-15T00:00:00.000Z", revokedAt: null },
     { id: "inv_rev", token: "p_porto.demo-revoked-token-01", createdAt: "2026-09-01T09:00:00.000Z", expiresAt: "2027-01-01T00:00:00.000Z", revokedAt: "2026-09-02T09:00:00.000Z" },
   );
+  po.members.push(
+    { id: "m_kid", displayName: "Kid", isOwner: false, isGuest: false, hasRecoverableAccount: false, joinedAt: "2026-09-02T10:00:00.000Z", status: "ACTIVE", referenced: false, accountDeleted: false, kind: "PLACEHOLDER", inviteState: null, inviteExpiresAt: null },
+    { id: "m_nina", displayName: "Nina", isOwner: false, isGuest: false, hasRecoverableAccount: false, joinedAt: "2026-09-02T10:05:00.000Z", status: "ACTIVE", referenced: false, accountDeleted: false, kind: "PLACEHOLDER", inviteState: "INVITED", inviteExpiresAt: "2099-01-01T00:00:00.000Z" },
+  );
+  po.principals.m_kid = "ph:m_kid";
+  po.principals.m_nina = "ph:m_nina";
+  po.memberInvites = { m_nina: { token: "p_porto.demo-member-invite-0001", email: "nina@example.com" } };
   kw.invitations.push({ id: "inv_kw", token: "p_kuwait.demo-frozen-token-001", createdAt: "2026-09-20T09:00:00.000Z", expiresAt: "2027-01-01T00:00:00.000Z", revokedAt: null });
 
   for (const p of Object.values(projects)) refreshReferenced(p);
@@ -717,6 +730,29 @@ export function createMockApi(): MockApi {
   const log = (p: MockProject, actor: string | null, action: string, roundId: string | null, entityId: string | null, summary: string, details: Record<string, unknown> | null = null) =>
     p.events.push({ id: uid("ev_"), at: now(), actorMemberId: actor, action, roundId, entityId, summary, details });
   const nameOf = (p: MockProject, id: string) => p.members.find((m) => m.id === id)?.displayName ?? "Someone";
+  const ph = (p: MockProject, memberId: string) => p.members.find((m) => m.id === memberId && m.status !== "REMOVED");
+  const memberOut = (p: MockProject, m: MemberDTO, owner = true): MemberDTO => ({
+    ...m,
+    ...(owner ? { invitedEmail: m.kind === "PLACEHOLDER" ? (p.memberInvites?.[m.id]?.email ?? null) : null } : {}),
+  });
+  const claim = (p: MockProject, m: MemberDTO, pr: Principal, name?: string) => {
+    p.principals[m.id] = pr.id;
+    delete p.memberInvites?.[m.id];
+    const renamed = name && p.project.membersCanRename ? name : m.displayName;
+    Object.assign(m, { kind: "PERSON", inviteState: null, inviteExpiresAt: null, isGuest: false, hasRecoverableAccount: true, displayName: renamed });
+    const r = active(p);
+    if (r.round.status === "COLLECTING") {
+      clearReady(r, "all");
+      r.round.reviewVersion++;
+    }
+    log(p, m.id, "MEMBER_CLAIMED", r.round.id, m.id, `${m.displayName} joined`);
+  };
+  const sendInvite = (p: MockProject, m: MemberDTO, email: string) => {
+    const token = `${p.project.id}.${crypto.randomUUID().replace(/-/g, "")}`;
+    p.memberInvites = { ...p.memberInvites, [m.id]: { token, email } };
+    Object.assign(m, { inviteState: "INVITED", inviteExpiresAt: new Date(Date.now() + 7 * 86400_000).toISOString() });
+    return `${location.origin}/invite#${token}`;
+  };
 
   const view = (p: MockProject): ProjectViewDTO => {
     const m = memberOf(p);
@@ -724,7 +760,7 @@ export function createMockApi(): MockApi {
     return {
       project: { ...p.project, pendingOwnerMemberId: p.pendingOwnership },
       me: { memberId: m.id, isOwner: m.isOwner },
-      members: p.members.map((x) => ({ ...x })),
+      members: p.members.map((x) => memberOut(p, x, m.isOwner)),
       rates: p.rates.map((x) => ({ ...x })),
       current: roundView(p, cur),
       rounds: [...p.rounds].reverse().map((r) => ({ ...r.round })),
@@ -947,6 +983,7 @@ export function createMockApi(): MockApi {
             r.round.reviewVersion++;
           }
         }
+        if (d.membersCanRename !== undefined) p.project.membersCanRename = d.membersCanRename;
         log(p, m.id, "SETTINGS_UPDATED", r.round.id, null, `${m.displayName} changed the group settings`);
       }),
     putRate: (id, cur, body, o) =>
@@ -1008,14 +1045,16 @@ export function createMockApi(): MockApi {
         if (!p || !inv || inv.revokedAt || new Date(inv.expiresAt).getTime() < Date.now()) fail(409, "INVITE_INVALID", "This invitation no longer works. Ask the owner for a new link.");
         const r = active(p);
         if (r.round.status === "SETTLING") fail(409, "INVITE_INVALID", "This group isn't taking new members while settling.");
-        if (!state.me) {
-          const g: Principal = { id: uid("pr_"), kind: "GUEST", email: null, displayName: d.data!.displayName };
-          state.principals[g.id] = g;
-          state.me = g.id;
-        }
-        const pr = me();
+        const pr = state.me ? state.principals[state.me] : undefined;
+        if (!pr || !pr.email) fail(401, "EMAIL_REQUIRED", "Confirm your email to join this group.");
         const existing = p.members.find((m) => p.principals[m.id] === pr.id && m.status === "ACTIVE");
-        if (existing) return { projectId };
+        if (existing) return { projectId, memberId: existing.id };
+        const invitedId = Object.entries(p.memberInvites ?? {}).find(([, v]) => v.email === pr.email)?.[0];
+        const invited = invitedId ? p.members.find((m) => m.id === invitedId && m.kind === "PLACEHOLDER") : undefined;
+        if (invited) {
+          claim(p, invited, pr, d.data!.displayName);
+          return { projectId, memberId: invited.id };
+        }
         const mid = uid("m_");
         p.members.push({ id: mid, displayName: d.data!.displayName, isOwner: false, isGuest: pr.kind === "GUEST", hasRecoverableAccount: pr.kind === "ACCOUNT" || !!pr.email, joinedAt: now(), status: "ACTIVE", referenced: false, accountDeleted: false, kind: "PERSON", inviteState: null, inviteExpiresAt: null });
         p.principals[mid] = pr.id;
@@ -1025,7 +1064,7 @@ export function createMockApi(): MockApi {
           r.round.reviewVersion++;
         }
         log(p, mid, "MEMBER_JOINED", r.round.id, mid, `${d.data!.displayName} joined`);
-        return { projectId };
+        return { projectId, memberId: mid };
       });
     },
 
@@ -1077,6 +1116,7 @@ export function createMockApi(): MockApi {
       mutate(o, id, "MEMBER_RENAMED", () => {
         const p = proj(id);
         const m = memberOf(p);
+        if (!p.project.membersCanRename && !m.isOwner) fail(403, "FORBIDDEN", "The owner manages names in this group.");
         const d = RenameMemberSchema.safeParse(body);
         if (!d.success) zodFail(d.error.issues);
         const next = d.data!.displayName;
@@ -1087,6 +1127,88 @@ export function createMockApi(): MockApi {
         }
         return { ...m };
       }),
+    addMember: (id, body, o) =>
+      mutate(o, id, "MEMBER_ADDED", (): AddMemberResultDTO => {
+        const p = proj(id);
+        const owner = ownerOnly(p);
+        const d = AddMemberSchema.safeParse(body);
+        if (!d.success) zodFail(d.error.issues);
+        if (active(p).round.status === "SETTLING") fail(409, "ROUND_NOT_COLLECTING", "Members are locked while settling.");
+        const mid = uid("m_");
+        const m: MemberDTO = { id: mid, displayName: d.data!.displayName, isOwner: false, isGuest: false, hasRecoverableAccount: false, joinedAt: now(), status: "ACTIVE", referenced: false, accountDeleted: false, kind: "PLACEHOLDER", inviteState: null, inviteExpiresAt: null };
+        p.members.push(m);
+        p.principals[mid] = `ph:${mid}`;
+        log(p, owner.id, "MEMBER_ADDED", active(p).round.id, mid, `Added ${m.displayName}`);
+        const devLink = d.data!.email ? sendInvite(p, m, d.data!.email) : undefined;
+        return { ...memberOut(p, m), emailSent: devLink ? true : null, ...(devLink ? { devLink } : {}) };
+      }),
+    renameMember: (id, memberId, body, o) =>
+      mutate(o, id, "MEMBER_RENAMED", () => {
+        const p = proj(id);
+        const owner = ownerOnly(p);
+        const d = RenameMemberSchema.safeParse(body);
+        if (!d.success) zodFail(d.error.issues);
+        const m = ph(p, memberId);
+        if (!m) fail(404, "NOT_FOUND", "This member isn't available.");
+        const prev = m.displayName;
+        m.displayName = d.data!.displayName;
+        log(p, owner.id, "MEMBER_RENAMED", null, m.id, `${owner.displayName} renamed ${prev} to ${m.displayName}`, { from: prev, to: m.displayName, byMemberId: owner.id });
+        return memberOut(p, m);
+      }),
+    inviteMember: (id, memberId, body, o) =>
+      mutate(o, id, "MEMBER_INVITED", (): AddMemberResultDTO => {
+        const p = proj(id);
+        ownerOnly(p);
+        const d = InviteMemberSchema.safeParse(body);
+        if (!d.success) zodFail(d.error.issues);
+        const m = ph(p, memberId);
+        if (!m || m.kind !== "PLACEHOLDER") fail(409, "INVALID_TRANSITION", "This person has already joined.");
+        const devLink = sendInvite(p, m, d.data!.email);
+        return { ...memberOut(p, m), emailSent: true, devLink };
+      }),
+    cancelMemberInvite: (id, memberId, o) =>
+      mutate(o, id, "MEMBER_INVITE_CANCELLED", () => {
+        const p = proj(id);
+        ownerOnly(p);
+        const m = ph(p, memberId);
+        if (!m || m.kind !== "PLACEHOLDER") fail(409, "INVALID_TRANSITION", "This person has already joined.");
+        delete p.memberInvites?.[m.id];
+        Object.assign(m, { inviteState: null, inviteExpiresAt: null });
+        return memberOut(p, m);
+      }),
+    previewMemberInvite: (token) =>
+      delay((): MemberInvitePreviewDTO => {
+        const p = state.projects[token.split(".")[0] ?? ""];
+        const entry = Object.entries(p?.memberInvites ?? {}).find(([, v]) => v.token === token);
+        const m = entry && p ? ph(p, entry[0]) : undefined;
+        if (!p || !m) fail(404, "INVITE_INVALID", "This invitation link isn't valid anymore. Ask the owner to send a new one.");
+        const already = state.me ? p.members.find((x) => p.principals[x.id] === state.me && x.status === "ACTIVE") : undefined;
+        const expired = new Date(m.inviteExpiresAt ?? 0).getTime() < Date.now();
+        return { projectName: p.project.name, baseCurrency: p.project.baseCurrency, displayName: m.displayName, status: expired ? "EXPIRED" : "OPEN", canRename: p.project.membersCanRename, alreadyMemberProjectId: already ? p.project.id : null };
+      }),
+    acceptMemberInvite: (body, o) => {
+      const projectId = body.token.split(".")[0] ?? "";
+      return mutate(o, projectId, "MEMBER_CLAIMED", () => {
+        const d = AcceptMemberInviteSchema.safeParse(body);
+        if (!d.success) zodFail(d.error.issues);
+        const p = state.projects[projectId];
+        const entry = Object.entries(p?.memberInvites ?? {}).find(([, v]) => v.token === body.token);
+        const m = entry && p ? ph(p, entry[0]) : undefined;
+        if (!p || !entry || !m) fail(404, "INVITE_INVALID", "This invitation link isn't valid anymore.");
+        if (new Date(m.inviteExpiresAt ?? 0).getTime() < Date.now()) fail(409, "INVITE_INVALID", "This invitation has expired.", undefined, { status: "EXPIRED" });
+        const email = entry[1].email;
+        let pr = Object.values(state.principals).find((x) => x.email === email);
+        if (!pr) {
+          pr = { id: uid("pr_"), kind: "ACCOUNT", email, displayName: m.displayName };
+          state.principals[pr.id] = pr;
+        }
+        const mine = p.members.find((x) => p.principals[x.id] === pr!.id && x.status !== "REMOVED");
+        if (mine) fail(409, "ALREADY_MEMBER", `You're already in this group as ${mine.displayName}.`);
+        claim(p, m, pr, d.data!.displayName);
+        state.me = pr.id;
+        return { projectId, memberId: m.id };
+      });
+    },
 
     createEntry: (id, roundId, body, o) =>
       mutate(o, id, "ENTRY_CREATED", () => {
@@ -1259,7 +1381,8 @@ export function createMockApi(): MockApi {
         if (r.round.status !== "SETTLING") fail(409, "ROUND_NOT_SETTLING", "This round isn't settling.");
         const i = r.instructions.find((x) => x.id === iid);
         if (!i) fail(404, "NOT_FOUND", "Transfer not found.");
-        if (i.fromMemberId !== m.id) fail(403, "FORBIDDEN", "Only the sender can mark this as sent.");
+        const stands = (mid: string) => mid === m.id || (m.isOwner && p.members.find((x) => x.id === mid)?.kind === "PLACEHOLDER");
+        if (!stands(i.fromMemberId)) fail(403, "FORBIDDEN", "Only the sender can mark this as sent.");
         if (i.state === "SENT") return;
         if (i.state !== "PROPOSED" && i.state !== "DISPUTED") fail(409, "INVALID_TRANSITION", "This transfer is already confirmed.");
         Object.assign(i, { state: "SENT", sentAt: now(), revision: i.revision + 1 });
@@ -1273,7 +1396,8 @@ export function createMockApi(): MockApi {
         if (r.round.status !== "SETTLING") fail(409, "ROUND_NOT_SETTLING", "This round isn't settling.");
         const i = r.instructions.find((x) => x.id === iid);
         if (!i) fail(404, "NOT_FOUND", "Transfer not found.");
-        if (i.toMemberId !== m.id) fail(403, "FORBIDDEN", "Only the recipient can confirm receipt.");
+        const stands = (mid: string) => mid === m.id || (m.isOwner && p.members.find((x) => x.id === mid)?.kind === "PLACEHOLDER");
+        if (!stands(i.toMemberId)) fail(403, "FORBIDDEN", "Only the recipient can confirm receipt.");
         if (i.state === "CONFIRMED") return;
         if (i.state !== "SENT") fail(409, "INVALID_TRANSITION", "The sender hasn't marked this as sent yet.");
         Object.assign(i, { state: "CONFIRMED", confirmedAt: now(), revision: i.revision + 1 });
@@ -1291,7 +1415,8 @@ export function createMockApi(): MockApi {
         const r = roundOf(p, roundId);
         const i = r.instructions.find((x) => x.id === iid);
         if (!i) fail(404, "NOT_FOUND", "Transfer not found.");
-        if (i.toMemberId !== m.id) fail(403, "FORBIDDEN", "Only the recipient can dispute receipt.");
+        const stands = (mid: string) => mid === m.id || (m.isOwner && p.members.find((x) => x.id === mid)?.kind === "PLACEHOLDER");
+        if (!stands(i.toMemberId)) fail(403, "FORBIDDEN", "Only the recipient can dispute receipt.");
         if (i.state !== "SENT") fail(409, "INVALID_TRANSITION", "Only a sent transfer can be disputed.");
         Object.assign(i, { state: "DISPUTED", disputedAt: now(), disputeNote: body.note ?? null, revision: i.revision + 1 });
         log(p, m.id, "INSTRUCTION_DISPUTED", r.round.id, i.id, `${m.displayName} hasn't received the repayment from ${nameOf(p, i.fromMemberId)}`);
@@ -1391,6 +1516,7 @@ export function createMockApi(): MockApi {
       ),
       h("button", { style: btn, onClick: simulateDisconnect }, "Simulate disconnect (4s)"),
       h("a", { style: { ...btn, textDecoration: "none" }, href: "/join#p_porto.demo-invite-token-0001" }, "Open demo invitation"),
+      h("a", { style: { ...btn, textDecoration: "none" }, href: "/invite#p_porto.demo-member-invite-0001" }, "Open demo email invite"),
       h("button", { style: btn, onClick: () => setOpen(false) }, "Close"),
     );
   };
