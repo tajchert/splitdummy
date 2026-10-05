@@ -326,9 +326,6 @@ export function join(tx: Tx, req: DoRequest, prepared: { secretHash: string }): 
     throw conflict("ROUND_NOT_COLLECTING", "Settlement is in progress, so nobody can join right now.", { status });
   }
   const body = parseBody(JoinBody, req.body);
-  const activeCount = tx.store.count("SELECT COUNT(*) AS n FROM members WHERE status != 'REMOVED'");
-  if (activeCount >= LIMITS.members) throw limitExceeded(`A group can have at most ${LIMITS.members} members.`);
-
   // An invited person joining by link with the invited email takes over their placeholder.
   const invited = principal.email && (!existing || existing.status === "REMOVED") ? findInvitedPlaceholder(tx, principal.email) : undefined;
   if (invited) {
@@ -336,6 +333,9 @@ export function join(tx: Tx, req: DoRequest, prepared: { secretHash: string }): 
     const result: JoinResultDTO = { projectId: project.id, memberId: claimed.id };
     return ok(result);
   }
+
+  const activeCount = tx.store.count("SELECT COUNT(*) AS n FROM members WHERE status != 'REMOVED'");
+  if (activeCount >= LIMITS.members) throw limitExceeded(`A group can have at most ${LIMITS.members} members.`);
 
   let member: MemberRow;
   if (existing) {
@@ -382,7 +382,12 @@ export function removeMember(tx: Tx, req: DoRequest): DoResponse {
     if (tx.store.isReferenced(target.id)) {
       throw conflict("MEMBER_REFERENCED", "This person appears in expenses or settlements, so they can't be removed.");
     }
-    tx.store.run("UPDATE members SET status = 'REMOVED', status_changed_at = ? WHERE id = ?", tx.now, target.id);
+    tx.store.run(
+      `UPDATE members SET status = 'REMOVED', status_changed_at = ?, invited_email = NULL, invite_secret_hash = NULL,
+         invite_sent_at = NULL, invite_expires_at = NULL WHERE id = ?`,
+      tx.now,
+      target.id,
+    );
     if (project.pending_owner_member_id === target.id) {
       tx.store.run("UPDATE project SET pending_owner_member_id = NULL WHERE id = ?", project.id);
     }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { JoinResultDTO, MemberDTO, MemberInvitePreviewDTO, ProjectDTO } from "@shared/api";
 import { runInDurableObject } from "cloudflare:test";
 import type { Principal } from "../../worker/do/types";
-import { Client, createGroup, errorCode, expense, freezeNow, makePrincipal } from "./helpers";
+import { sqlIn, Client, createGroup, errorCode, expense, freezeNow, makePrincipal } from "./helpers";
 
 describe("member contract defaults", () => {
   it("existing members are PERSONs without invites; renaming is allowed by default", async () => {
@@ -257,5 +257,63 @@ describe("placeholders outside the ledger", () => {
     const view = await g.owner.view();
     expect(view.members.filter((m) => m.status === "ACTIVE")).toHaveLength(2);
     expect(view.members.find((m) => m.id === zoe.id)).toMatchObject({ kind: "PERSON", displayName: "Zoe B" });
+  });
+});
+
+describe("account deletion after claiming", () => {
+  const anonymize = (c: Client) => c.call("anonymizeMember", {}, null, null);
+
+  it("scrubs the claimed row, its audit trail and the stored invited email", async () => {
+    const g = await createGroup({ members: 0 });
+    const { member, token } = await invite(g, "Zoe", "z@example.com");
+    const zoe = new Client(g.stub, g.projectId, accountFor("z@example.com"));
+    await zoe.ok("acceptMemberInvite", { tokenSecret: token }, { displayName: "Zoë" });
+    expect((await anonymize(zoe)).status).toBe(200);
+    const rows = await sqlIn<{ display_name: string; account_deleted: number; invited_email: string | null }>(g.stub, "SELECT * FROM members WHERE id = ?", member.id);
+    expect(rows[0]).toMatchObject({ display_name: "Deleted account", account_deleted: 1, invited_email: null });
+    const withEmail = await sqlIn(g.stub, "SELECT id FROM members WHERE invited_email IS NOT NULL");
+    expect(withEmail).toHaveLength(0);
+    const audit = JSON.stringify(await sqlIn(g.stub, "SELECT summary, details_json FROM audit_events"));
+    expect(audit).not.toContain("Zoe");
+    expect(audit).not.toContain("Zoë");
+  });
+
+  it("also anonymizes the earlier removed row retired by a re-claim", async () => {
+    const g = await createGroup({ members: 0 });
+    const zoe = new Client(g.stub, g.projectId, accountFor("z@example.com"));
+    const linkToken = (await g.owner.ok<{ url: string }>("createInvite")).url.split("#")[1]!;
+    const first = await zoe.ok<JoinResultDTO>("join", { tokenSecret: linkToken }, { displayName: "OldZoe" });
+    await g.owner.ok("removeMember", { memberId: first.memberId });
+    const { token } = await invite(g, "NewZoe", "z@example.com");
+    await zoe.ok("acceptMemberInvite", { tokenSecret: token }, {});
+    expect((await anonymize(zoe)).status).toBe(200);
+    const rows = await sqlIn<{ display_name: string; account_deleted: number }>(g.stub, "SELECT display_name, account_deleted FROM members WHERE id = ?", first.memberId);
+    expect(rows[0]).toMatchObject({ display_name: "Deleted account", account_deleted: 1 });
+    const audit = JSON.stringify(await sqlIn(g.stub, "SELECT summary, details_json FROM audit_events"));
+    expect(audit).not.toContain("OldZoe");
+    expect(audit).not.toContain("NewZoe");
+  });
+});
+
+describe("placeholder removal and joins at capacity", () => {
+  it("removing an invited placeholder clears its invite; the link is dead", async () => {
+    const g = await createGroup({ members: 0 });
+    const { member, token } = await invite(g, "Zoe", "z@example.com");
+    await g.owner.ok("removeMember", { memberId: member.id });
+    const rows = await sqlIn<{ invited_email: string | null; invite_secret_hash: string | null }>(g.stub, "SELECT invited_email, invite_secret_hash FROM members WHERE id = ?", member.id);
+    expect(rows[0]).toEqual({ invited_email: null, invite_secret_hash: null });
+    const res = await new Client(g.stub, g.projectId, null).call("previewMemberInvite", { tokenSecret: token }, null, null);
+    expect(res.status).toBe(404);
+  });
+
+  it("a link join with the invited email claims even when the group is full", async () => {
+    const g = await createGroup({ members: 0 });
+    const zoe = await g.owner.ok<MemberDTO>("addMember", {}, { displayName: "Zoe", email: "z@example.com" });
+    for (let i = 0; i < 48; i++) await g.owner.ok("addMember", {}, { displayName: `P${i}` });
+    const linkToken = (await g.owner.ok<{ url: string }>("createInvite")).url.split("#")[1]!;
+    const joiner = new Client(g.stub, g.projectId, accountFor("z@example.com"));
+    expect((await joiner.ok<JoinResultDTO>("join", { tokenSecret: linkToken }, { displayName: "Zoe" })).memberId).toBe(zoe.id);
+    const other = new Client(g.stub, g.projectId, accountFor("o@example.com"));
+    expect((await errorCode(other.call("join", { tokenSecret: linkToken }, { displayName: "O" }))).status).toBe(429);
   });
 });

@@ -156,10 +156,10 @@ export function previewMemberInvite(tx: Tx, prepared: { secretHash: string }): D
     canRename: project.members_can_rename === 1,
     alreadyMemberProjectId: mine && mine.status === "ACTIVE" ? project.id : null,
   };
-  return { status: 200, body, transient: { invitedEmail: m.invited_email! } };
+  return { status: 200, body, ...(m.invited_email !== null ? { transient: { invitedEmail: m.invited_email } } : {}) };
 }
 
-/** Placeholder whose live email invite matches a verified address (used by link joins too). */
+/** Placeholder invited with this email (expired invites included: the address is still proven by sign-in). */
 export function findInvitedPlaceholder(tx: Tx, email: string): MemberRow | undefined {
   return tx.store.first<MemberRow>(
     "SELECT * FROM members WHERE kind = 'PLACEHOLDER' AND status = 'ACTIVE' AND invited_email = ?",
@@ -175,11 +175,11 @@ export function findInvitedPlaceholder(tx: Tx, email: string): MemberRow | undef
 export function claimPlaceholder(tx: Tx, m: MemberRow, principal: Principal, displayName: string | undefined): MemberRow {
   const previous = tx.store.memberByPrincipal(principal.principalId);
   if (previous && previous.id !== m.id) {
-    tx.store.run("UPDATE members SET principal_id = ? WHERE id = ?", `${PLACEHOLDER_PREFIX}${previous.id}`, previous.id);
+    tx.store.run("UPDATE members SET principal_id = ? WHERE id = ?", `${PLACEHOLDER_PREFIX}retired:${principal.principalId}:${previous.id}`, previous.id);
   }
   const rename = displayName !== undefined && tx.project.members_can_rename === 1 && displayName !== m.display_name;
   tx.store.run(
-    "UPDATE members SET principal_id = ?, kind = 'PERSON', is_guest = ?, has_recoverable_account = ?, display_name = ? WHERE id = ?",
+    "UPDATE members SET principal_id = ?, kind = 'PERSON', invited_email = NULL, is_guest = ?, has_recoverable_account = ?, display_name = ? WHERE id = ?",
     principal.principalId,
     principal.kind === "GUEST" ? 1 : 0,
     principal.hasRecoverableAccount ? 1 : 0,

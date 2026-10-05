@@ -75,8 +75,7 @@ memberRoutes.post("/api/member-invites/accept", async (c) => {
   const requestId = c.get("requestId");
 
   const preview = await callProject(c.env, { op: "previewMemberInvite", projectId, principal: null, params: { tokenSecret }, requestId });
-  const email = preview.transient?.invitedEmail;
-  if (!isOk(preview) || !email) return toHttpResponse(c, forBrowser(preview), "previewMemberInvite");
+  if (!isOk(preview)) return toHttpResponse(c, forBrowser(preview), "previewMemberInvite");
   const status = (preview.body as { status: string }).status;
   if (status !== "OPEN") {
     throw new ApiError(
@@ -85,6 +84,9 @@ memberRoutes.post("/api/member-invites/accept", async (c) => {
       { status: 409, details: { status } },
     );
   }
+
+  const email = preview.transient?.invitedEmail;
+  if (!email) throw new ApiError("INVITE_INVALID", "This invitation link isn't valid anymore. Ask the owner to send a new one.");
 
   const account = await findOrCreateAccount(c.env.DB, email);
   const principal = toPrincipal(account);
