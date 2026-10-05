@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import type { InvitationPreviewDTO } from "@shared/api";
 import { DisplayNameSchema } from "@shared/api";
 import { useApi, useSession } from "../api/context";
@@ -8,9 +8,19 @@ import { useSubmit } from "../api/idempotency";
 import { Field } from "../components/Field";
 import { PageLoading, useTitle } from "../components/Shell";
 import { useToast } from "../components/Toast";
-import { Turnstile, useTurnstileRequired, type TurnstileHandle } from "../components/Turnstile";
-import { Banner, Icon, Logo } from "../components/ui";
+import { Turnstile } from "../components/Turnstile";
+import { Icon, Logo } from "../components/ui";
 import { currencyName } from "../lib/format";
+import { useEmailLinkForm } from "./SignIn";
+
+/** The token from a /join#<token> fragment; "" (an incomplete link) when it isn't valid percent-encoding. */
+function tokenFromHash(hash: string): string {
+  try {
+    return decodeURIComponent(hash.slice(1));
+  } catch {
+    return "";
+  }
+}
 
 const UNAVAILABLE: Record<Exclude<InvitationPreviewDTO["status"], "OPEN">, { icon: string; title: string; body: string }> = {
   EXPIRED: { icon: "schedule", title: "This invitation has expired", body: "Ask the group owner for a new link." },
@@ -24,9 +34,11 @@ const UNAVAILABLE: Record<Exclude<InvitationPreviewDTO["status"], "OPEN">, { ico
 
 export function Join() {
   const params = useParams();
-  const { hash } = useLocation();
+  const { hash, state: navState } = useLocation();
   // Invitation links carry the token in the fragment (/join#<token>) so it never hits server logs.
-  const token = params.token ?? decodeURIComponent(hash.slice(1));
+  const token = params.token ?? tokenFromHash(hash);
+  // Only AuthConfirm sets this: a crafted ?auto=1 link alone must never join without a click.
+  const fromMagicLink = (navState as { justSignedIn?: boolean } | null)?.justSignedIn === true;
   const api = useApi();
   const { me, refresh } = useSession();
   const navigate = useNavigate();
@@ -34,11 +46,13 @@ export function Join() {
   const { run, pending } = useSubmit();
   const [preview, setPreview] = useState<InvitationPreviewDTO | null>(null);
   const [loadError, setLoadError] = useState<ApiError | null>(null);
-  const [name, setName] = useState(me?.displayName ?? "");
+  const [search, setSearch] = useSearchParams();
+  const verified = !!me?.email;
+  const [name, setName] = useState(search.get("name") ?? me?.displayName ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [tsToken, setTsToken] = useState<string | null>(null);
-  const ts = useRef<TurnstileHandle>(null);
-  const needsToken = useTurnstileRequired();
+  const nextPath = (n: string) => `/join/${encodeURIComponent(token)}?name=${encodeURIComponent(n)}&auto=1`;
+  const emailForm = useEmailLinkForm("signin", nextPath(name.trim()));
+  const autoStarted = useRef(false);
   useTitle(preview ? `Join ${preview.projectName}` : "Join a group");
 
   useEffect(() => {
@@ -53,6 +67,22 @@ export function Join() {
     if (me?.displayName && !name) setName(me.displayName);
   }, [me, name]);
 
+  const doJoin = async (displayName: string) => {
+    try {
+      const r = await run({ token, displayName }, (k) => api.join({ token, displayName }, { idempotencyKey: k }));
+      await refresh();
+      toast(`You joined ${preview?.projectName ?? "the group"}`);
+      navigate(`/g/${encodeURIComponent(r.projectId)}`, { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "INVITE_INVALID") {
+        api.previewInvite(token).then(setPreview, () => {});
+      }
+      // The session lapsed between pages: refreshing drops `me` and shows the email form again.
+      if (err instanceof ApiError && err.code === "EMAIL_REQUIRED") await refresh();
+      setErrors(err instanceof ApiError ? fieldErrors(err) : { _form: errorMessage(err) });
+    }
+  };
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const n = DisplayNameSchema.safeParse(name);
@@ -60,25 +90,43 @@ export function Join() {
       setErrors({ displayName: n.error.issues[0]?.message ?? "Enter a name" });
       return;
     }
-    if (needsToken && !tsToken) {
-      setErrors({ _form: "Complete the check above the button first." });
-      return;
-    }
-    try {
-      const r = await run({ token, displayName: n.data }, (k) =>
-        api.join({ token, displayName: n.data, ...(tsToken ? { turnstileToken: tsToken } : {}) }, { idempotencyKey: k }),
-      );
-      await refresh();
-      toast(`You joined ${preview?.projectName ?? "the group"}`);
-      navigate(`/g/${encodeURIComponent(r.projectId)}`, { replace: true });
-    } catch (err) {
-      if (err instanceof ApiError && err.code === "TURNSTILE_FAILED") ts.current?.reset();
-      if (err instanceof ApiError && err.code === "INVITE_INVALID") {
-        api.previewInvite(token).then(setPreview, () => {});
-      }
-      setErrors(err instanceof ApiError ? fieldErrors(err) : { _form: errorMessage(err) });
-    }
+    await doJoin(n.data);
   };
+
+  // Back from the magic link (?name=…&auto=1): join without another click.
+  useEffect(() => {
+    if (autoStarted.current || search.get("auto") !== "1" || !fromMagicLink || !verified || preview?.status !== "OPEN" || preview.alreadyMemberProjectId) return;
+    const n = DisplayNameSchema.safeParse(search.get("name") ?? "");
+    if (!n.success) return;
+    autoStarted.current = true;
+    // Drop auto=1 first so a refresh or StrictMode re-run never submits twice.
+    const next = new URLSearchParams(search);
+    next.delete("auto");
+    setSearch(next, { replace: true });
+    void doJoin(n.data);
+  }, [search, verified, preview, fromMagicLink]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const nameField = (
+    <Field label="Your name" error={errors.displayName} hint="How others in the group will see you. Pick something they'll recognise.">
+      {(p) => (
+        <input
+          {...p}
+          className="input"
+          value={name}
+          maxLength={40}
+          autoComplete="given-name"
+          autoFocus
+          onChange={(e) => (setName(e.target.value), setErrors({}))}
+        />
+      )}
+    </Field>
+  );
+  const formError = (msg: string) => (
+    <div className="form-error" role="alert">
+      <Icon name="error" size={18} />
+      {msg}
+    </div>
+  );
 
   return (
     <div className="narrow-page">
@@ -129,46 +177,47 @@ export function Join() {
                 Settles in {preview.baseCurrency} ({currencyName(preview.baseCurrency)})
               </span>
             </p>
-            <form className="stack-16" onSubmit={onSubmit} noValidate>
-              <Field label="Your name" error={errors.displayName} hint="How others in the group will see you. Pick something they'll recognise.">
-                {(p) => (
-                  <input
-                    {...p}
-                    className="input"
-                    value={name}
-                    maxLength={40}
-                    autoComplete="given-name"
-                    autoFocus
-                    onChange={(e) => (setName(e.target.value), setErrors({}))}
-                  />
-                )}
-              </Field>
-              <Turnstile ref={ts} onToken={setTsToken} action="join" />
-              {errors._form && (
-                <div className="form-error" role="alert">
-                  <Icon name="error" size={18} />
-                  {errors._form}
-                </div>
-              )}
-              <button type="submit" className="btn btn-primary btn-block" disabled={pending}>
-                {pending ? "Joining…" : me ? "Join group" : "Join as guest"}
-              </button>
-            </form>
-            {!me && (
-              <div className="card card-tight join-note">
-                <p className="small">
-                  <b>Joining as a guest</b> keeps you signed in on this browser. To open the group on another device later, add your email from your account page.
-                </p>
-                <Link to={`/signin?next=${encodeURIComponent(`/join/${encodeURIComponent(token)}`)}`} className="link-btn small">
-                  <Icon name="mail" size={16} />
-                  Sign in with email instead
-                </Link>
-              </div>
-            )}
-            {me && (
-              <p className="tiny muted">
-                Joining as {me.email ?? "a guest on this browser"}. You'll be added as a new member; nobody can take over another person's place.
-              </p>
+            {verified ? (
+              <form className="stack-16" onSubmit={onSubmit} noValidate>
+                {nameField}
+                {errors._form && formError(errors._form)}
+                <button type="submit" className="btn btn-primary btn-block" disabled={pending}>
+                  {pending ? "Joining…" : "Join"}
+                </button>
+                <p className="tiny muted">Joining as {me!.email}. If the owner invited this email, you'll take over that spot; otherwise you're added as a new member.</p>
+              </form>
+            ) : (
+              <form
+                className="stack-16"
+                noValidate
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const n = DisplayNameSchema.safeParse(name);
+                  if (!n.success) return setErrors({ displayName: n.error.issues[0]?.message ?? "Enter a name" });
+                  const sent = await emailForm.submit();
+                  if (sent) navigate("/signin/sent", { state: { email: sent.email, devLink: sent.devLink, next: nextPath(n.data) } });
+                }}
+              >
+                {nameField}
+                <Field label="Email" error={emailForm.error ?? undefined} hint="We'll email you a link. Opening it confirms your email and adds you to the group.">
+                  {(p) => (
+                    <input
+                      {...p}
+                      className="input"
+                      type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      value={emailForm.email}
+                      onChange={(e) => emailForm.setEmail(e.target.value)}
+                    />
+                  )}
+                </Field>
+                <Turnstile ref={emailForm.ts} onToken={emailForm.setToken} action="sign_in" />
+                {errors._form && formError(errors._form)}
+                <button type="submit" className="btn btn-primary btn-block" disabled={emailForm.pending}>
+                  {emailForm.pending ? "Sending…" : "Email me a link"}
+                </button>
+              </form>
             )}
           </>
         )}

@@ -23,7 +23,7 @@ import {
 import { decimalSeparator, fmtDateTime, fmtMoney, fmtRate, minorToInput, todayYmd } from "../../lib/format";
 import { activeMembers, nameOf, readinessOf, roundLabel } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
-import { groupBase } from "./parts";
+import { groupBase, PlaceholderTag } from "./parts";
 import { noteSelfReadyChange } from "./selfChange";
 
 export function EntryFormRoute({ type }: { type?: "EXPENSE" | "REFUND" }) {
@@ -545,7 +545,7 @@ function SplitEditor({ d, ev, view, errors, update, ctx }: {
                 onChange={(e) => toggle(m.id, e.target.checked)}
               />
               <label htmlFor={`p-${m.id}`} className="grow split-name">
-                {nameOf(view, m.id, { you: true })}
+                {nameOf(view, m.id, { you: true })} <PlaceholderTag member={m} hidden />
               </label>
               {d.splitMode === "EQUAL" || !on ? (
                 <span className="split-share amount">{shareOf(m.id)}</span>

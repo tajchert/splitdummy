@@ -28,7 +28,7 @@ Most splitting apps keep a running balance that never quite ends, and the "who o
 
 - **Repayments don't move.** Once the owner freezes the list, the transfers are fixed. Paying one person never changes what you owe someone else.
 - **You can see who's still adding.** Each person marks *"Everything added from my side"*, so you know when the list is complete.
-- **Friends don't need an account.** They join from a link as guests, and only the owner needs an email.
+- **No passwords, and room for people who aren't signed up.** Friends join from a link by confirming their email. The owner can add someone by name and invite them by email later; when they join, they take over that spot with everything already split.
 
 ## How it works
 

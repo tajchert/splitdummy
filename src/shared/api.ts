@@ -51,7 +51,11 @@ export type ApiErrorCode =
   | "TURNSTILE_FAILED"
   | "LIMIT_EXCEEDED"
   | "INTERNAL"
-  | "SIGNIN_LINK_INVALID";
+  | "SIGNIN_LINK_INVALID"
+  /** Joining by link needs a signed-in account with a verified email. */
+  | "EMAIL_REQUIRED"
+  /** Accepting an email invite while already in the group under another identity. */
+  | "ALREADY_MEMBER";
 
 export interface ApiErrorBody {
   error: {
@@ -133,6 +137,13 @@ export interface MemberDTO {
   referenced: boolean;
   /** The member's account was deleted; displayName is then a neutral placeholder ("Deleted account"). */
   accountDeleted: boolean;
+  /** PLACEHOLDER: added by the owner by name; no account until someone claims it through an email invite. */
+  kind: "PERSON" | "PLACEHOLDER";
+  /** Placeholders with an email invite: INVITED until it expires, then INVITE_EXPIRED. */
+  inviteState: "INVITED" | "INVITE_EXPIRED" | null;
+  inviteExpiresAt: string | null;
+  /** Owner view only (absent for everyone else). */
+  invitedEmail?: string | null;
 }
 
 export interface RoundDTO {
@@ -245,6 +256,8 @@ export interface ProjectDTO {
   baseCurrency: string;
   baseExponent: number;
   multiCurrencyEnabled: boolean;
+  /** When false only the owner changes display names (renameMe is 403 for others). */
+  membersCanRename: boolean;
   /** True once any ledger entry has ever been committed. */
   baseCurrencyLocked: boolean;
   activeRoundId: string | null;
@@ -335,7 +348,7 @@ export const RequestSignInSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   turnstileToken: z.string().max(4096).optional(),
   /** Where to land after verification (relative path only). */
-  next: z.string().regex(/^\/[^/]/).max(200).optional(),
+  next: z.string().regex(/^\/[^/]/).max(500).optional(),
 });
 
 /** POST /api/auth/verify body; the token comes from the /auth/confirm#token=… fragment. */
@@ -360,6 +373,7 @@ export const UpdateSettingsSchema = z.object({
   expectedVersion: z.number().int().nonnegative(),
   name: ProjectNameSchema.optional(),
   multiCurrencyEnabled: z.boolean().optional(),
+  membersCanRename: z.boolean().optional(),
   baseCurrency: CurrencyCodeSchema.optional(),
 });
 
@@ -371,6 +385,7 @@ export const PutRateSchema = z.object({
 export const JoinSchema = z.object({
   token: z.string().min(16).max(200),
   displayName: DisplayNameSchema,
+  /** Accepted for compatibility and ignored: joining requires a signed-in verified email instead. */
   turnstileToken: z.string().max(4096).optional(),
 });
 
@@ -462,6 +477,37 @@ export interface DeletionPreviewDTO {
 
 export const TransferOwnershipSchema = z.object({ toMemberId: IdSchema });
 
+const InviteEmailSchema = z.string().trim().toLowerCase().email("Enter an email address like name@example.com").max(254);
+
+/** POST /api/projects/:projectId/members → 201 AddMemberResultDTO. Owner only; email sends a 7-day invite. */
+export const AddMemberSchema = z.object({ displayName: DisplayNameSchema, email: InviteEmailSchema.optional() });
+/** POST /api/projects/:projectId/members/:memberId/invite → AddMemberResultDTO. Attach an email or resend (new link). */
+export const InviteMemberSchema = z.object({ email: InviteEmailSchema });
+/** POST /api/member-invites/accept → JoinResultDTO + session cookie for the invited email's account. */
+export const AcceptMemberInviteSchema = z.object({
+  token: z.string().min(16).max(200),
+  displayName: DisplayNameSchema.optional(),
+});
+
+/** GET /api/member-invites/:token (public; never includes the invited email). */
+export interface MemberInvitePreviewDTO {
+  projectName: string;
+  baseCurrency: string;
+  /** The placeholder's current name. */
+  displayName: string;
+  status: "OPEN" | "EXPIRED" | "CLAIMED";
+  /** Whether the invitee may change the name while accepting. */
+  canRename: boolean;
+  alreadyMemberProjectId: string | null;
+}
+
+export interface AddMemberResultDTO extends MemberDTO {
+  /** null when no email was involved or this was a replay; false when sending failed (owner can resend). */
+  emailSent: boolean | null;
+  /** Local dev only: the invite link, since there may be no inbox. */
+  devLink?: string;
+}
+
 // ---------- endpoints (reference) ----------
 export const ENDPOINTS = {
   config: "GET /api/config", // -> ConfigDTO (public)
@@ -486,6 +532,12 @@ export const ENDPOINTS = {
   previewInvite: "GET /api/invitations/:token",
   join: "POST /api/invitations/join", // -> { projectId }
   removeMember: "DELETE /api/projects/:projectId/members/:memberId",
+  addMember: "POST /api/projects/:projectId/members", // -> 201 AddMemberResultDTO
+  renameMember: "PATCH /api/projects/:projectId/members/:memberId/name", // -> MemberDTO (owner)
+  inviteMember: "POST /api/projects/:projectId/members/:memberId/invite", // -> AddMemberResultDTO
+  cancelMemberInvite: "DELETE /api/projects/:projectId/members/:memberId/invite", // -> MemberDTO
+  previewMemberInvite: "GET /api/member-invites/:token", // -> MemberInvitePreviewDTO
+  acceptMemberInvite: "POST /api/member-invites/accept", // -> JoinResultDTO
   leave: "POST /api/projects/:projectId/leave",
   transferOwnership: "POST /api/projects/:projectId/ownership", // offer
   acceptOwnership: "POST /api/projects/:projectId/ownership/accept",

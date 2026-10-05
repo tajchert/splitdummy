@@ -15,7 +15,7 @@ import type {
 } from "@shared/api";
 import type { OutboxMessage } from "../../worker/do/types";
 import { processMessage } from "../../worker/queue/consumer";
-import { call, mockTurnstile, sessionCookie, signIn, testEnv, uniqueEmail } from "./helpers";
+import { call, mockTurnstile, signIn, testEnv, uniqueEmail } from "./helpers";
 
 beforeEach(() => {
   mockTurnstile();
@@ -36,13 +36,14 @@ async function createGroup(cookie: string, name: string, ownerDisplayName: strin
   return json<ProjectViewDTO>(await call("/api/projects", { cookie, body: { name, baseCurrency: "PLN", ownerDisplayName } }), 201);
 }
 
-/** Joins with `cookie` (or as a new guest when null); returns the member ID and the session cookie. */
+/** Joins with `cookie` (or as a newly signed-in account when null); returns the member ID and the session cookie. */
 async function join(owner: string, projectId: string, displayName: string, cookie: string | null) {
+  cookie ??= await signIn(uniqueEmail(displayName.toLowerCase()));
   const invite = await json<InvitationDTO>(await call(`/api/projects/${projectId}/invitations`, { method: "POST", cookie: owner }), 201);
   const token = decodeURIComponent(new URL(invite.url ?? "").hash.slice(1));
-  const res = await call("/api/invitations/join", { cookie, body: { token, displayName, turnstileToken: "ok" } });
+  const res = await call("/api/invitations/join", { cookie, body: { token, displayName } });
   const joined = await json<JoinResultDTO>(res);
-  return { memberId: joined.memberId, cookie: cookie ?? sessionCookie(res)! };
+  return { memberId: joined.memberId, cookie };
 }
 
 const view = async (cookie: string, projectId: string) => json<ProjectViewDTO>(await call(`/api/projects/${projectId}`, { cookie }));
@@ -269,7 +270,7 @@ describe("account deletion", () => {
     expect((await call("/api/me", { cookie: ann })).status).toBe(401);
   });
 
-  it("lets a guest delete themselves; requires a session", async () => {
+  it("lets a joined member delete themselves; requires a session", async () => {
     expect((await call("/api/me", { method: "DELETE", body: { confirm: "DELETE" } })).status).toBe(401);
     expect((await call("/api/me/deletion-preview")).status).toBe(401);
     const owner = await signIn(uniqueEmail("owner"));

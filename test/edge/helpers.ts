@@ -4,6 +4,8 @@ import { vi } from "vitest";
 import worker from "../../worker/index";
 import { ProjectDO } from "../../worker/do/ProjectDO";
 import type { DoRequest, DoResponse } from "../../worker/do/types";
+import { createGuest } from "../../worker/auth/principals";
+import { createSession, sessionCookieName } from "../../worker/auth/session";
 
 export const ORIGIN = "http://localhost";
 export const testEnv = env as Env;
@@ -106,4 +108,11 @@ export function projectView(projectId: string, memberId = "m_owner", version = 1
     me: { memberId, isOwner: true },
     current: { round: { id: "r_1", sequence: 1, status: "COLLECTING" } },
   };
+}
+
+/** An un-emailed guest session, as created before joins required a verified email. */
+export async function guestSession(): Promise<{ cookie: string; principalId: string }> {
+  const guest = await createGuest(testEnv.DB);
+  const { token } = await createSession(testEnv.DB, guest);
+  return { cookie: `${sessionCookieName(ORIGIN)}=${token}`, principalId: guest.id };
 }

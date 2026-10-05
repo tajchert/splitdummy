@@ -12,3 +12,6 @@ export const LIMITS = {
 } as const;
 
 export const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** Email invitations to a placeholder. */
+export const MEMBER_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;

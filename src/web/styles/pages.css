@@ -2148,3 +2148,19 @@
 .api-key-list { padding: 0; margin: 18px 0 0; list-style: none; }
 .api-key-list li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
 .api-key-info { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+
+/* Placeholder / invite status tags next to member names. */
+.chip-sm {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--ink2);
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+.chip-warn {
+  background: var(--amber-soft);
+  color: var(--ink);
+}

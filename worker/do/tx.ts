@@ -5,7 +5,7 @@
  */
 import type { ProjectSummaryDTO } from "@shared/api";
 import { conflict, forbidden, notCollecting, notFound, unauthenticated } from "./errors";
-import type { MemberRow, ProjectRow, RoundRow, Store } from "./store";
+import { isPlaceholderPrincipal, type MemberRow, type ProjectRow, type RoundRow, type Store } from "./store";
 import type { OutboxMessage, Principal } from "./types";
 
 type NotifyKind = Extract<OutboxMessage, { type: "NOTIFY" }>["payload"]["kind"];
@@ -164,7 +164,9 @@ export class Tx {
     let outbox = false;
     const principals = new Map(this.store.members().map((m) => [m.id, m.principal_id]));
     for (const n of this.notifications) {
-      const principalIds = [...new Set(n.memberIds.map((id) => principals.get(id)).filter((p): p is string => !!p))];
+      const principalIds = [
+        ...new Set(n.memberIds.map((id) => principals.get(id)).filter((p): p is string => !!p && !isPlaceholderPrincipal(p))),
+      ];
       if (principalIds.length === 0) continue;
       this.writeOutbox({
         id: newId("o"),
@@ -217,8 +219,8 @@ export function directoryPayload(store: Store): DirectoryPayload {
       : [],
   );
   const instructions = round && round.status === "SETTLING" ? store.instructions(round.id) : [];
-  // A deleted account has no "My groups" row; its principal no longer exists.
-  const members = store.members().filter((m) => m.account_deleted !== 1);
+  // Deleted accounts and placeholders have no "My groups" row: there is no real principal behind them.
+  const members = store.members().filter((m) => m.account_deleted !== 1 && !isPlaceholderPrincipal(m.principal_id));
 
   const nextAction = (m: MemberRow): NextAction | null => {
     if (m.status === "REMOVED" || !round) return null;

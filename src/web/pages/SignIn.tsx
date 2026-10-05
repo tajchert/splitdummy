@@ -10,7 +10,7 @@ import { Turnstile, useTurnstileRequired, type TurnstileHandle } from "../compon
 import { Banner, Icon, Logo } from "../components/ui";
 
 function safeNext(n: string | null): string | undefined {
-  return n && /^\/[^/]/.test(n) ? n.slice(0, 200) : undefined;
+  return n && /^\/[^/]/.test(n) ? n.slice(0, 500) : undefined;
 }
 
 /** Shared by sign-in and "attach email": validate, Turnstile, idempotent submit. */
@@ -137,7 +137,7 @@ export function SignIn() {
               </button>
             </form>
             <p className="tiny muted">
-              Joining a group from an invitation? Open the link you were sent; you can join as a guest without an email.
+              Joining a group from an invitation? Open the link you were sent and enter your email there.
             </p>
           </>
         )}

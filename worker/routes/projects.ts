@@ -46,6 +46,8 @@ export const PROJECT_ROUTES = {
   removeMember: { op: "removeMember" },
   leave: { op: "leave" },
   renameMe: { op: "renameMe", schema: RenameMemberSchema },
+  renameMember: { op: "renameMember", schema: RenameMemberSchema },
+  cancelMemberInvite: { op: "cancelMemberInvite" },
   transferOwnership: { op: "transferOwnership", schema: TransferOwnershipSchema },
   acceptOwnership: { op: "acceptOwnership" },
   createEntry: { op: "createEntry", schema: EntryInputSchema },
@@ -151,7 +153,8 @@ for (const [key, route] of Object.entries(PROJECT_ROUTES) as [EndpointKey, DoRou
       idempotencyKey,
       requestId: c.get("requestId"),
     });
-    return toHttpResponse(c, res, route.op);
+    // Edge-only fields (`transient`) never reach browsers from any op.
+    return toHttpResponse(c, { status: res.status, body: res.body, headers: res.headers }, route.op);
   });
 }
 

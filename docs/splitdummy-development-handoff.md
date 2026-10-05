@@ -33,7 +33,7 @@ Success means a participant can understand their position, add a normal expense 
 - Frozen rounds cannot be reopened or rewritten. Corrections use a subsequent round.
 - Multiple expense currencies convert into one project settlement currency.
 - Initial conversion uses explicit, saved manual rates or the payer’s known converted amount. An external exchange-rate feed is not a launch dependency.
-- Owner accounts are recoverable; participants can join as guests.
+- Owner accounts are recoverable; participants join with a verified email (magic link), or are added by the owner as placeholders and invited by email.
 
 ## 2. Scope
 
@@ -41,7 +41,7 @@ Success means a participant can understand their position, add a normal expense 
 
 1. Owner account creation, sign-in, and recovery.
 2. Create a project and share a revocable invitation link.
-3. Guest joining, distinct member identities, optional account upgrade.
+3. Verified-email joining, placeholder members and email invites, distinct member identities, optional account upgrade.
 4. Add expenses with one payer, selected participants, equal or exact splitting.
 5. Add refunds using an explicit refund form.
 6. Edit/delete entries while the round is collecting.
@@ -198,7 +198,7 @@ Each payer’s base contribution equals the saved base amount. Refunds use posit
 |---|---|
 | Landing | Product promise, create group, join invitation, sign in |
 | Create project | Name, settlement currency, optional multi-currency toggle |
-| Join | Group name, display name, create distinct guest identity; never claim an existing person by name |
+| Join | Group name, display name, email verification; never claim an existing person by name |
 | Group — collecting | Add expense, total, personal provisional balance, readiness checklist, entry list |
 | Expense/refund form | Description, date, amount, payer/refund recipient, participants, split mode; foreign currency controls only when relevant |
 | Balance explanation | Contributions, allocated costs/refunds, resulting net position, relevant entries |
@@ -245,7 +245,7 @@ Use WebSockets to announce committed versions and updated views. A missed messag
 | Entity | Essential fields |
 |---|---|
 | Project | ID, name, ownerMemberId, baseCurrency, baseExponent, multiCurrencyEnabled, activeRoundId, version |
-| Member | Stable ID, account/guest principal, displayName, joinedAt, visibility status |
+| Member | Stable ID, account or placeholder principal, displayName, joinedAt, visibility status |
 | Round | ID, sequence, status, ledgerVersion, reviewVersion, timestamps |
 | Readiness | Round/member ID, ready flag, markedAt |
 | LedgerEntry | ID, round ID, type EXPENSE/REFUND/ADJUSTMENT, creator, occurredAt, description, original/base amounts and currencies, FX provenance, revision, optional correctedEntryId |
@@ -280,6 +280,8 @@ Publish an OpenAPI contract and shared validation schemas. Amounts use decimal-s
 | Update settings/rate defaults | `PATCH /api/projects/:projectId/settings`, `PUT /api/projects/:projectId/rates/:currency` |
 | Create/revoke invitation | `POST/DELETE /api/projects/:projectId/invitations/:inviteId?` |
 | Join using token | `POST /api/invitations/join` |
+| Add placeholder / rename / invite / revoke invite | `POST /api/projects/:projectId/members`, `PATCH .../members/:memberId/name`, `POST/DELETE .../members/:memberId/invite` |
+| View/accept member invite | `GET /api/member-invites/:token`, `POST /api/member-invites/accept` |
 | Create/update/delete entry | `POST /api/projects/:projectId/rounds/:roundId/entries`, `PATCH/DELETE .../entries/:entryId` |
 | Set own readiness | `PUT /api/projects/:projectId/rounds/:roundId/readiness/me` |
 | Review/freeze | `GET .../rounds/:roundId/review`, `POST .../rounds/:roundId/freeze` |
@@ -292,8 +294,8 @@ Use 401 for no valid session, 403 for forbidden role, 404 for unavailable resour
 ## 11. Identity, security, and recovery
 
 - Owners sign in with expiring single-use email links. Store token hashes, not raw tokens; consume them atomically.
-- Each guest receives an independent random principal and a Secure, HttpOnly, SameSite cookie session. Joining does not grant access to an existing identity or owner role.
-- Offer attaching a verified email for cross-device recovery. Explain that an unrecovered guest session may be lost if browser data is cleared.
+- New members always have a verified email; existing guest sessions keep working. Joining does not grant access to an existing identity or owner role.
+- Placeholder invites expire after 7 days and claim the placeholder only on acceptance by a verified email.
 - Invitation tokens are high entropy, expire, and can be revoked. Revalidate current group state at join; frozen membership cannot be changed.
 - Keep session revocation authoritative in D1, not an eventually consistent cache. Use CSRF/origin checks for cookie-authenticated mutations and authenticated WebSocket upgrades.
 - Check all IDs against the requested project/round. Parameterize SQL and bound input sizes.

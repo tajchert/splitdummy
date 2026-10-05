@@ -3,6 +3,7 @@ import { sha256Hex } from "../../worker/lib/crypto";
 import type { SignInRequestedDTO, SignInVerifiedDTO } from "@shared/api";
 import {
   call,
+  guestSession,
   mockProjectDO,
   mockTurnstile,
   sessionCookie,
@@ -225,19 +226,15 @@ describe("sessions", () => {
 
 describe("guest upgrade", () => {
   async function joinAsGuest(): Promise<{ cookie: string; principalId: string }> {
-    mockProjectDO((req) =>
-      req.op === "join"
-        ? { status: 200, body: { projectId: req.params.projectId } }
-        : { status: 200, body: { project: { id: req.params.projectId, name: "Trip", baseCurrency: "PLN", version: 2 }, me: { memberId: "m_g", isOwner: false }, current: { round: { status: "COLLECTING", sequence: 1 } } } },
-    );
+    const g = await guestSession();
+    // Legacy guests were members of a group, which is what the upgrade notifies.
     const projectId = `p_${crypto.randomUUID().replace(/-/g, "")}`;
-    const res = await call("/api/invitations/join", { body: { token: `${projectId}.${"s".repeat(43)}`, displayName: "Guest", turnstileToken: "ok" } });
-    expect(res.status).toBe(200);
-    const cookie = sessionCookie(res);
-    if (!cookie) throw new Error("no guest cookie");
-    const me = await (await call("/api/me", { cookie })).json<{ principalId: string; kind: string }>();
-    expect(me.kind).toBe("GUEST");
-    return { cookie, principalId: me.principalId };
+    await testEnv.DB.prepare(
+      "INSERT INTO project_directory (principal_id, project_id, member_id, status, name, base_currency, project_version, updated_at) VALUES (?, ?, 'm_g', 'ACTIVE', 'Trip', 'PLN', 2, ?)",
+    )
+      .bind(g.principalId, projectId, new Date().toISOString())
+      .run();
+    return { cookie: g.cookie, principalId: g.principalId };
   }
 
   it("sign-in from an un-emailed guest session upgrades that principal in place and notifies its DOs", async () => {

@@ -8,6 +8,7 @@ import { handleScheduled } from "./queue/scheduled";
 import { accountRoutes } from "./routes/account";
 import { authRoutes } from "./routes/auth";
 import { invitationRoutes } from "./routes/invitations";
+import { memberRoutes } from "./routes/members";
 import { liveRoutes } from "./routes/live";
 import { projectRoutes } from "./routes/projects";
 import { apiKeyRoutes } from "./routes/api-keys";
@@ -36,6 +37,7 @@ app.route("/", apiKeyRoutes);
 app.route("/", openApiRoutes);
 app.route("/", liveRoutes);
 app.route("/", invitationRoutes);
+app.route("/", memberRoutes);
 app.route("/", projectRoutes);
 
 // Hashed build files. A stale tab asking for a chunk from a previous deploy must get a 404 (the client

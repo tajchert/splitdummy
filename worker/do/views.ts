@@ -55,6 +55,7 @@ export function projectDto(p: ProjectRow): ProjectDTO {
     baseCurrency: p.base_currency,
     baseExponent: p.base_exponent,
     multiCurrencyEnabled: p.multi_currency_enabled === 1,
+    membersCanRename: p.members_can_rename === 1,
     baseCurrencyLocked: p.base_currency_locked === 1,
     activeRoundId: p.active_round_id,
     version: p.version,
@@ -62,7 +63,9 @@ export function projectDto(p: ProjectRow): ProjectDTO {
   };
 }
 
-export function memberDto(m: MemberRow, p: ProjectRow, referenced: boolean): MemberDTO {
+export function memberDto(m: MemberRow, p: ProjectRow, referenced: boolean, viewerIsOwner = false, now = new Date().toISOString()): MemberDTO {
+  const placeholder = m.kind === "PLACEHOLDER";
+  const invited = placeholder && m.invited_email !== null && m.invite_expires_at !== null;
   return {
     id: m.id,
     displayName: m.display_name,
@@ -73,6 +76,10 @@ export function memberDto(m: MemberRow, p: ProjectRow, referenced: boolean): Mem
     status: m.status,
     referenced,
     accountDeleted: m.account_deleted === 1,
+    kind: m.kind,
+    inviteState: invited ? (Date.parse(m.invite_expires_at!) > Date.parse(now) ? "INVITED" : "INVITE_EXPIRED") : null,
+    inviteExpiresAt: invited ? m.invite_expires_at : null,
+    ...(viewerIsOwner ? { invitedEmail: placeholder ? m.invited_email : null } : {}),
   };
 }
 
@@ -259,12 +266,12 @@ export function snapshotBalances(balances: MemberBalance[]): SnapshotData["balan
   return balances.map(memberBalanceJson);
 }
 
-/** Members expected to mark readiness: currently ACTIVE members whose account still exists. */
+/** Members expected to mark readiness: currently ACTIVE people (not placeholders) whose account still exists. */
 export function readinessList(store: Store, roundId: string): ReadinessDTO[] {
   const rows = new Map(store.readiness(roundId).map((r) => [r.member_id, r]));
   return store
     .members()
-    .filter((m) => m.status === "ACTIVE" && m.account_deleted !== 1)
+    .filter((m) => m.status === "ACTIVE" && m.account_deleted !== 1 && m.kind !== "PLACEHOLDER")
     .map((m) => {
       const r = rows.get(m.id);
       return { memberId: m.id, ready: r?.ready === 1, markedAt: r?.marked_at ?? null };
@@ -341,7 +348,7 @@ export function projectView(store: Store, me: MemberRow): ProjectViewDTO {
   return {
     project: projectDto(project),
     me: { memberId: me.id, isOwner },
-    members: store.members().map((m) => memberDto(m, project, referenced.has(m.id))),
+    members: store.members().map((m) => memberDto(m, project, referenced.has(m.id), isOwner)),
     rates: store.rates().map(rateDto),
     current: roundView(store, current),
     rounds: rounds.map(roundDto),

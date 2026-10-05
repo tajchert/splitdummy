@@ -14,6 +14,7 @@ import { getCurrency, parseRate, rateToString } from "@shared/money";
 import { z } from "zod";
 import { ApiError, conflict, forbidden, invalid, limitExceeded, notFound, parseBody } from "../errors";
 import { INVITE_TTL_MS, LIMITS } from "../limits";
+import { claimPlaceholder, findInvitedPlaceholder } from "./members";
 import type { InvitationRow, MemberRow } from "../store";
 import { newId, type Tx } from "../tx";
 import type { DoRequest, DoResponse, Principal } from "../types";
@@ -150,6 +151,16 @@ export function updateSettings(tx: Tx, req: DoRequest): OpResult {
       { roundId: round?.id ?? null, entityId: project.id },
     );
     tx.clearReadiness("ALL");
+  }
+
+  const canRename = project.members_can_rename === 1;
+  if (body.membersCanRename !== undefined && body.membersCanRename !== canRename) {
+    tx.store.run("UPDATE project SET members_can_rename = ? WHERE id = ?", body.membersCanRename ? 1 : 0, project.id);
+    tx.audit(
+      "MEMBER_RENAME_POLICY_CHANGED",
+      body.membersCanRename ? "Let members change their own names" : "Only the owner can change names now",
+      { entityId: project.id, details: { membersCanRename: body.membersCanRename } },
+    );
   }
 
   return projectResult(tx);
@@ -315,6 +326,14 @@ export function join(tx: Tx, req: DoRequest, prepared: { secretHash: string }): 
     throw conflict("ROUND_NOT_COLLECTING", "Settlement is in progress, so nobody can join right now.", { status });
   }
   const body = parseBody(JoinBody, req.body);
+  // An invited person joining by link with the invited email takes over their placeholder.
+  const invited = principal.email && (!existing || existing.status === "REMOVED") ? findInvitedPlaceholder(tx, principal.email) : undefined;
+  if (invited) {
+    const claimed = claimPlaceholder(tx, invited, principal, body.displayName);
+    const result: JoinResultDTO = { projectId: project.id, memberId: claimed.id };
+    return ok(result);
+  }
+
   const activeCount = tx.store.count("SELECT COUNT(*) AS n FROM members WHERE status != 'REMOVED'");
   if (activeCount >= LIMITS.members) throw limitExceeded(`A group can have at most ${LIMITS.members} members.`);
 
@@ -363,7 +382,12 @@ export function removeMember(tx: Tx, req: DoRequest): DoResponse {
     if (tx.store.isReferenced(target.id)) {
       throw conflict("MEMBER_REFERENCED", "This person appears in expenses or settlements, so they can't be removed.");
     }
-    tx.store.run("UPDATE members SET status = 'REMOVED', status_changed_at = ? WHERE id = ?", tx.now, target.id);
+    tx.store.run(
+      `UPDATE members SET status = 'REMOVED', status_changed_at = ?, invited_email = NULL, invite_secret_hash = NULL,
+         invite_sent_at = NULL, invite_expires_at = NULL WHERE id = ?`,
+      tx.now,
+      target.id,
+    );
     if (project.pending_owner_member_id === target.id) {
       tx.store.run("UPDATE project SET pending_owner_member_id = NULL WHERE id = ?", project.id);
     }
@@ -398,6 +422,9 @@ export function leave(tx: Tx): DoResponse {
 /** Own display name in this group. Identity, not money: allowed in any round state; names may repeat. */
 export function renameMe(tx: Tx, req: DoRequest): OpResult {
   const me = tx.member();
+  if (tx.project.members_can_rename !== 1 && tx.project.owner_member_id !== me.id) {
+    throw forbidden("The owner manages names in this group.");
+  }
   const body = parseBody(RenameMemberSchema, req.body);
   if (body.displayName !== me.display_name) {
     tx.store.run("UPDATE members SET display_name = ? WHERE id = ?", body.displayName, me.id);

@@ -36,6 +36,15 @@ describe("expense form", () => {
   });
   afterEach(() => cleanup());
 
+  it("tags placeholder members in the participant picker without changing the checkbox name", async () => {
+    const st = JSON.parse(localStorage.getItem("splitdummy-mock-v3")!);
+    st.me = "pr_lea";
+    localStorage.setItem("splitdummy-mock-v3", JSON.stringify(st));
+    renderAt(createMockApi(), "/g/p_porto/new");
+    const box = await screen.findByRole("checkbox", { name: "Kid" });
+    expect(box.parentElement?.querySelector(".chip-sm")?.textContent).toBe("placeholder");
+  });
+
   it("shows a currency selector only when the group allows other currencies", async () => {
     renderAt(api, "/g/p_lisbon/new");
     expect(await screen.findByRole("combobox", { name: "Currency" })).toBeTruthy();

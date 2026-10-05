@@ -76,6 +76,7 @@ export function deletionPrincipals(tx: Tx): string[] {
  */
 export function anonymizeMember(tx: Tx): DoResponse {
   const me = membership(tx);
+  anonymizeRetiredRows(tx);
   const OK: OkDTO = { ok: true };
   if (!me) return ok(OK);
   const project = tx.project;
@@ -93,7 +94,7 @@ export function anonymizeMember(tx: Tx): DoResponse {
   const round = tx.activeRound();
   const leave = me.status === "ACTIVE" && round?.status !== "SETTLING";
   tx.store.run(
-    `UPDATE members SET display_name = ?, account_deleted = 1, principal_id = ?, has_recoverable_account = 0,
+    `UPDATE members SET display_name = ?, account_deleted = 1, principal_id = ?, has_recoverable_account = 0, invited_email = NULL,
        status = ?, status_changed_at = ? WHERE id = ?`,
     DELETED_ACCOUNT_NAME,
     `deleted_${me.id}`,
@@ -118,6 +119,27 @@ export function anonymizeMember(tx: Tx): DoResponse {
   return ok(OK);
 }
 
+/**
+ * Rows of this account that a later invite claim retired (`ph:retired:<principalId>:<memberId>`)
+ * are the same person's earlier membership: scrub them like any removed member.
+ */
+function anonymizeRetiredRows(tx: Tx): void {
+  const principalId = tx.principal!.principalId;
+  const rows = tx.store.all<MemberRow>(
+    "SELECT * FROM members WHERE principal_id LIKE ? ESCAPE '\\'",
+    `ph:retired:${principalId.replace(/[\\%_]/g, "\\$&")}:%`,
+  );
+  for (const row of rows) {
+    tx.store.run(
+      "UPDATE members SET display_name = ?, account_deleted = 1, principal_id = ?, has_recoverable_account = 0, invited_email = NULL WHERE id = ?",
+      DELETED_ACCOUNT_NAME,
+      `deleted_${row.id}`,
+      row.id,
+    );
+    anonymizeAudit(tx, row.id);
+  }
+}
+
 /** Redact system-generated identity labels, keeping action, IDs and financial details. */
 function anonymizeAudit(tx: Tx, memberId: string): void {
   const events = tx.store.all<AuditRow>(
@@ -128,7 +150,7 @@ function anonymizeAudit(tx: Tx, memberId: string): void {
   for (const event of events) {
     let summary = `Activity involving a deleted account: ${event.action.toLowerCase().replaceAll("_", " ")}`;
     let details = event.details_json;
-    if (event.action === "MEMBER_RENAMED" && event.entity_id === memberId) {
+    if ((event.action === "MEMBER_RENAMED" || (event.action === "MEMBER_CLAIMED" && details)) && event.entity_id === memberId) {
       details = JSON.stringify({ from: DELETED_ACCOUNT_NAME, to: DELETED_ACCOUNT_NAME });
     }
     // Transfer amounts have no duplicate in audit details; retain them in the label.

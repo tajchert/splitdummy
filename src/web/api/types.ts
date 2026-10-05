@@ -1,5 +1,8 @@
 import type { z } from "zod";
 import type {
+  AcceptMemberInviteSchema,
+  AddMemberResultDTO,
+  AddMemberSchema,
   AdjustmentInputSchema,
   ApiKeyDTO,
   CreatedApiKeyDTO,
@@ -17,9 +20,12 @@ import type {
   InstructionActionSchema,
   InvitationDTO,
   InvitationPreviewDTO,
+  InviteMemberSchema,
+  JoinResultDTO,
   JoinSchema,
   MeDTO,
   MemberDTO,
+  MemberInvitePreviewDTO,
   ProjectSummaryDTO,
   ProjectViewDTO,
   PutRateSchema,
@@ -55,6 +61,9 @@ export type UpdateMeBody = z.input<typeof UpdateMeSchema>;
 export type RenameMemberBody = z.input<typeof RenameMemberSchema>;
 export type FreezeScheduleBody = z.input<typeof FreezeScheduleSchema>;
 export type DeleteAccountBody = z.input<typeof DeleteAccountSchema>;
+export type AddMemberBody = z.input<typeof AddMemberSchema>;
+export type InviteMemberBody = z.input<typeof InviteMemberSchema>;
+export type AcceptMemberInviteBody = z.input<typeof AcceptMemberInviteSchema>;
 
 /** Every mutation carries the key of its logical submit; retries of that submit reuse it. */
 export interface MutationOptions {
@@ -104,7 +113,7 @@ export interface Api {
   createInvite(projectId: string, o: MutationOptions): Promise<InvitationDTO>;
   revokeInvite(projectId: string, inviteId: string, o: MutationOptions): Promise<void>;
   previewInvite(token: string): Promise<InvitationPreviewDTO>;
-  join(body: JoinBody, o: MutationOptions): Promise<{ projectId: string }>;
+  join(body: JoinBody, o: MutationOptions): Promise<{ projectId: string; memberId?: string }>;
 
   removeMember(projectId: string, memberId: string, o: MutationOptions): Promise<void>;
   leave(projectId: string, o: MutationOptions): Promise<void>;
@@ -112,6 +121,15 @@ export interface Api {
   acceptOwnership(projectId: string, o: MutationOptions): Promise<void>;
   /** Your own display name in this group. */
   renameMe(projectId: string, body: RenameMemberBody, o: MutationOptions): Promise<MemberDTO>;
+  /** Owner: add someone by name; with an email they get a 7-day invitation to claim the spot. */
+  addMember(projectId: string, body: AddMemberBody, o: MutationOptions): Promise<AddMemberResultDTO>;
+  renameMember(projectId: string, memberId: string, body: RenameMemberBody, o: MutationOptions): Promise<MemberDTO>;
+  /** Owner: email (or re-email) a placeholder; the earlier link stops working. */
+  inviteMember(projectId: string, memberId: string, body: InviteMemberBody, o: MutationOptions): Promise<AddMemberResultDTO>;
+  cancelMemberInvite(projectId: string, memberId: string, o: MutationOptions): Promise<MemberDTO>;
+  previewMemberInvite(token: string): Promise<MemberInvitePreviewDTO>;
+  /** Signs this browser in as the invited email's account and claims the placeholder. */
+  acceptMemberInvite(body: AcceptMemberInviteBody, o: MutationOptions): Promise<JoinResultDTO>;
 
   createEntry(projectId: string, roundId: string, body: EntryBody, o: MutationOptions): Promise<void>;
   updateEntry(projectId: string, roundId: string, entryId: string, body: UpdateEntryBody, o: MutationOptions): Promise<void>;

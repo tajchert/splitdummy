@@ -48,6 +48,12 @@ export type DoOp =
   | "deleteProject" // internal: principal must be owner → { memberPrincipalIds: string[] }, then wipes all DO storage (deleteAll) and alarms
   | "anonymizeMember" // internal: principal = deleting account → marks member accountDeleted, displayName "Deleted account", status LEFT if collecting; audited MEMBER_ACCOUNT_DELETED
   | "backupSnapshot" // internal (principal null, edge cron only): full JSON dump of all tables for R2
+  | "addMember" // owner; body AddMemberSchema; prepared secret used only when body.email is set
+  | "renameMember" // owner; params.memberId; body RenameMemberSchema
+  | "inviteMember" // owner; params.memberId (a placeholder); body InviteMemberSchema; rotates the secret
+  | "cancelMemberInvite" // owner; params.memberId
+  | "previewMemberInvite" // read; principal may be null; params.tokenSecret; transient.invitedEmail for the edge
+  | "acceptMemberInvite" // principal = the invited email's account; params.tokenSecret; body { displayName? }
   | "principalUpdated"; // edge notifies that a principal attached a verified email; body: Principal
 
 export interface DoRequest {
@@ -61,11 +67,30 @@ export interface DoRequest {
   requestId: string;
 }
 
+/** Invitation email the edge sends after an addMember/inviteMember commit. */
+export interface MemberInviteMail {
+  to: string;
+  /** `${APP_ORIGIN}/invite#${projectId}.${secret}` — carries the raw secret. */
+  url: string;
+  projectName: string;
+  inviterName: string;
+  displayName: string;
+  expiresAt: string;
+}
+
+/** Edge-only data. Never stored with the idempotency record, never returned to browsers. */
+export interface DoTransient {
+  inviteMail?: MemberInviteMail;
+  /** previewMemberInvite: the address the invite was sent to. */
+  invitedEmail?: string;
+}
+
 export interface DoResponse {
   status: number;
   /** JSON-serializable body (ApiErrorBody on error), or a string for CSV. */
   body: unknown;
   headers?: Record<string, string>;
+  transient?: DoTransient;
 }
 
 /** RPC surface of ProjectDO (extends DurableObject). */
