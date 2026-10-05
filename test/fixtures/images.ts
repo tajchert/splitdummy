@@ -51,3 +51,11 @@ export function includesAscii(bytes: Uint8Array, text: string): boolean {
   for (const b of bytes) s += String.fromCharCode(b);
   return s.includes(text);
 }
+
+/** Low-level JPEG builders for tests that need exact marker layouts. */
+export const jpegSeg = (marker: number, payload: number[] | string): number[] =>
+  segment(marker, typeof payload === "string" ? ascii(payload) : payload);
+export const jpegSof = (width: number, height: number): number[] =>
+  segment(0xc0, [8, ...u16be(height), ...u16be(width), 1, 1, 0x11, 0]);
+export const JPEG_SOS = segment(0xda, [1, 1, 0, 0, 0x3f, 0]);
+export const bytes = (...parts: number[][]): Uint8Array => new Uint8Array(parts.flat());

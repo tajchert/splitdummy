@@ -40,63 +40,118 @@ export function stripMetadata(b: Uint8Array, type: AttachmentContentType): Uint8
 
 /** Start-of-frame markers (baseline, progressive, lossless, arithmetic); they carry the image size. */
 const SOF = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
-/** APP1 (EXIF, XMP), APP13 (IPTC/Photoshop), COM. */
-const JPEG_DROP = new Set([0xe1, 0xed, 0xfe]);
+const ICC_TAG = "ICC_PROFILE\0";
+/** Upper bound on marker segments, so hostile files cannot make the parser allocate without limit. */
+const MAX_PARTS = 1024;
 
-interface Segment {
-  marker: number;
-  start: number;
-  payload: number;
-  end: number;
+interface ParsedJpeg {
+  width: number;
+  height: number;
+  /** Flat [start, end) byte ranges to keep, in order. */
+  keep: number[];
 }
 
-/** Header segments up to and including the first SOS; `rest` is where the scan data starts. */
-function jpegSegments(b: Uint8Array): { segments: Segment[]; rest: number } | null {
-  const segments: Segment[] = [];
+/** Allowlist: JFIF/JFXX, ICC profile, Adobe and all non-APP, non-COM markers. Other APPn and COM are dropped. */
+function keepJpegSegment(b: Uint8Array, marker: number, payload: number, end: number): boolean {
+  if (marker === 0xe0 || marker === 0xee) return true;
+  if (marker === 0xe2) return end - payload >= ICC_TAG.length && ascii(b, payload, ICC_TAG.length) === ICC_TAG;
+  return !(marker > 0xe0 || marker === 0xfe);
+}
+
+/**
+ * Walks the whole file: header segments, then each scan's entropy-coded data and any segments between scans,
+ * until EOI (anything after it is discarded). Returns null when malformed or implausibly fragmented.
+ */
+function parseJpeg(b: Uint8Array): ParsedJpeg | null {
+  const keep: number[] = [0, 2];
+  let width = 0;
+  let height = 0;
+  let parts = 0;
   let i = 2;
+  let scanned = false;
   for (;;) {
     const start = i;
+    if (i >= b.length) return width > 0 && height > 0 && scanned ? { width, height, keep } : null;
     if (b[i] !== 0xff) return null;
     while (b[i] === 0xff) i++; // marker prefix plus optional fill bytes
     const marker = b[i++];
-    if (marker === undefined || marker === 0xd9) return null; // truncated, or EOI before any scan
+    if (marker === undefined || marker === 0x00 || marker === 0xd8) return null;
+    if (++parts > MAX_PARTS) return null;
+    if (marker === 0xd9) {
+      if (!scanned) return null;
+      keep.push(start, i);
+      return width > 0 && height > 0 ? { width, height, keep } : null;
+    }
     if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
-      segments.push({ marker, start, payload: i, end: i });
+      if (!scanned) return null;
+      if (marker === 0x01) keep.push(start, i);
       continue;
     }
     if (i + 2 > b.length) return null;
     const end = i + u16be(b, i);
     if (end < i + 2 || end > b.length) return null;
-    segments.push({ marker, start, payload: i + 2, end });
+    const payload = i + 2;
+    if (SOF.has(marker) && width === 0 && end - payload >= 5) {
+      height = u16be(b, payload + 1);
+      width = u16be(b, payload + 3);
+    }
+    if (keepJpegSegment(b, marker, payload, end)) keep.push(start, end);
     i = end;
-    if (marker === 0xda) return { segments, rest: end };
+    if (marker === 0xda) {
+      scanned = true;
+      // Entropy-coded data: FF00 and FFD0-D7 belong to it, FF FF.. is fill, any other FFxx is a marker.
+      let j = i;
+      while (j < b.length) {
+        if (b[j] !== 0xff) {
+          j++;
+          continue;
+        }
+        let k = j + 1;
+        while (b[k] === 0xff) k++;
+        const m = b[k];
+        if (m === undefined) {
+          j = b.length;
+          break;
+        }
+        if (m === 0x00 || (m >= 0xd0 && m <= 0xd7)) {
+          j = k + 1;
+          continue;
+        }
+        break;
+      }
+      keep.push(i, j);
+      i = j;
+    }
   }
 }
 
 function jpegInfo(b: Uint8Array): ImageInfo | null {
-  const parsed = jpegSegments(b);
-  const sof = parsed?.segments.find((s) => SOF.has(s.marker) && s.end - s.payload >= 5);
-  if (!sof) return null;
-  const height = u16be(b, sof.payload + 1);
-  const width = u16be(b, sof.payload + 3);
-  return width > 0 && height > 0 ? { type: "image/jpeg", width, height } : null;
+  const parsed = parseJpeg(b);
+  return parsed ? { type: "image/jpeg", width: parsed.width, height: parsed.height } : null;
 }
 
 function stripJpeg(b: Uint8Array): Uint8Array {
-  const parsed = jpegSegments(b);
+  const parsed = parseJpeg(b);
   if (!parsed) throw new Error("stripJpeg: not a JPEG");
-  return concat([
-    b.subarray(0, 2),
-    ...parsed.segments.filter((s) => !JPEG_DROP.has(s.marker)).map((s) => b.subarray(s.start, s.end)),
-    b.subarray(parsed.rest),
-  ]);
+  const { keep } = parsed;
+  let size = 0;
+  for (let n = 0; n < keep.length; n += 2) size += keep[n + 1]! - keep[n]!;
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (let n = 0; n < keep.length; n += 2) {
+    out.set(b.subarray(keep[n]!, keep[n + 1]!), at);
+    at += keep[n + 1]! - keep[n]!;
+  }
+  return out;
 }
 
 // ---------- WebP ----------
 
 const VP8X_EXIF = 0x08;
 const VP8X_XMP = 0x04;
-const WEBP_DROP = new Set(["EXIF", "XMP "]);
+/** Allowlist: everything needed to render; EXIF, XMP and unknown chunks are dropped. */
+const WEBP_KEEP = new Set(["VP8X", "ICCP", "ANIM", "ANMF", "ALPH", "VP8 ", "VP8L"]);
+const MAX_CHUNKS = 1024;
 
 interface Chunk {
   fourcc: string;
@@ -116,6 +171,7 @@ function webpChunks(b: Uint8Array): Chunk[] | null {
     const data = i + 8;
     if (data + size > riffEnd) return null;
     const end = Math.min(data + size + (size & 1), riffEnd);
+    if (chunks.length >= MAX_CHUNKS) return null;
     chunks.push({ fourcc: ascii(b, i, 4), start: i, data, size, end });
     i = end;
   }
@@ -143,7 +199,7 @@ function webpInfo(b: Uint8Array): ImageInfo | null {
 function stripWebp(b: Uint8Array): Uint8Array {
   const chunks = webpChunks(b);
   if (!chunks) throw new Error("stripWebp: not a WebP");
-  const kept = chunks.filter((c) => !WEBP_DROP.has(c.fourcc));
+  const kept = chunks.filter((c) => WEBP_KEEP.has(c.fourcc));
   const body = concat([b.subarray(8, 12), ...kept.map((c) => b.subarray(c.start, c.end))]);
   if (kept[0]?.fourcc === "VP8X") body[12] = body[12]! & ~(VP8X_EXIF | VP8X_XMP); // "WEBP"(4) + chunk header(8)
   const size = body.length;
