@@ -301,7 +301,9 @@
 }
 .landing-foot {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  gap: 10px 16px;
   padding: 0 22px 30px;
   font-size: 12px;
   color: var(--ink2);
@@ -309,6 +311,7 @@
 .landing-foot-links {
   display: flex;
   gap: 14px;
+  white-space: nowrap;
 }
 
 @media (min-width: 860px) {

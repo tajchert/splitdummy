@@ -116,6 +116,7 @@ export function Landing() {
         <span className="landing-foot-links">
           <Link to="/docs/api">API docs</Link>
           <Link to="/privacy">Privacy</Link>
+          <a href="https://github.com/tajchert/splitdummy" rel="noopener">GitHub</a>
         </span>
       </footer>
     </div>
