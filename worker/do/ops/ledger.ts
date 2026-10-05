@@ -27,6 +27,7 @@ import type { EntryRow, MemberRow, RoundRow } from "../store";
 import { newId, type Tx } from "../tx";
 import type { DoRequest } from "../types";
 import { entryDto } from "../views";
+import { extrasSummary, normalizeNote } from "./attachments";
 import { ok, rateErrorMessage, type OpResult } from "./project";
 
 interface PreparedEntry {
@@ -226,8 +227,8 @@ export function createEntry(tx: Tx, req: DoRequest): OpResult {
     `INSERT INTO entries (id, round_id, type, creator_member_id, occurred_at, description,
        original_amount, original_currency, original_exponent, base_amount, base_currency, base_exponent,
        conversion_method, rate, rate_source, rate_set_by_member_id, rate_set_at, conversion_note,
-       payer_member_id, split_mode, revision, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+       payer_member_id, split_mode, note, revision, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
     id,
     round.id,
     input.type,
@@ -248,6 +249,7 @@ export function createEntry(tx: Tx, req: DoRequest): OpResult {
     p.note,
     input.payerMemberId,
     input.splitMode,
+    normalizeNote(input.note),
     tx.now,
     tx.now,
   );
@@ -298,11 +300,12 @@ export function updateEntry(tx: Tx, req: DoRequest): OpResult {
   const before = entryDto(tx.store.loadEntry(row.id)!);
   const project = tx.project;
   const revision = row.revision + 1;
+  const note = input.note === undefined ? row.note : normalizeNote(input.note);
   tx.store.run(
     `UPDATE entries SET type = ?, last_edited_by_member_id = ?, occurred_at = ?, description = ?,
        original_amount = ?, original_currency = ?, original_exponent = ?, base_amount = ?, base_currency = ?, base_exponent = ?,
        conversion_method = ?, rate = ?, rate_source = ?, rate_set_by_member_id = ?, rate_set_at = ?, conversion_note = ?,
-       payer_member_id = ?, split_mode = ?, revision = ?, updated_at = ?
+       payer_member_id = ?, split_mode = ?, note = ?, revision = ?, updated_at = ?
      WHERE id = ?`,
     input.type,
     me.id,
@@ -322,6 +325,7 @@ export function updateEntry(tx: Tx, req: DoRequest): OpResult {
     p.note,
     input.payerMemberId,
     input.splitMode,
+    note,
     revision,
     tx.now,
     row.id,
@@ -330,7 +334,8 @@ export function updateEntry(tx: Tx, req: DoRequest): OpResult {
   tx.financial();
   tx.clearReadiness([me.id, row.creator_member_id]);
   const after = entryDto(tx.store.loadEntry(row.id)!);
-  tx.audit("ENTRY_UPDATED", `${me.display_name} edited “${input.description}” ${describe(p)}`, {
+  const extras = extrasSummary(before, after);
+  tx.audit("ENTRY_UPDATED", `${me.display_name} edited “${input.description}” ${describe(p)}${extras.map((x) => ` · ${x}`).join("")}`, {
     roundId: round.id,
     entityId: row.id,
     revision,
