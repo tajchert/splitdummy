@@ -69,11 +69,17 @@ export function PhotoViewer({ urls, index, onIndex, onClose }: { urls: string[];
       finish();
     };
     d.addEventListener("cancel", onCancel);
-    d.addEventListener("close", finish);
+    // StrictMode's dev double-mount: the first cleanup's d.close() queues a `close` event that the
+    // second mount's fresh listener would receive. A genuine close always leaves d.open false.
+    const onDialogClose = () => {
+      if (d.open) return;
+      finish();
+    };
+    d.addEventListener("close", onDialogClose);
     return () => {
       closed = true;
       d.removeEventListener("cancel", onCancel);
-      d.removeEventListener("close", finish);
+      d.removeEventListener("close", onDialogClose);
       if (d.open && typeof d.close === "function") d.close();
     };
   }, []);
