@@ -22,7 +22,9 @@ import {
 } from "../../lib/entryForm";
 import { decimalSeparator, fmtDateTime, fmtMoney, fmtRate, minorToInput, todayYmd } from "../../lib/format";
 import { activeMembers, nameOf, readinessOf, roundLabel } from "../../lib/project";
+import { usePhotoUploads } from "../../lib/usePhotoUploads";
 import { useProject, useView } from "../../state/project";
+import { NoteAndPhotos } from "./NoteAndPhotos";
 import { groupBase, PlaceholderTag } from "./parts";
 import { noteSelfReadyChange } from "./selfChange";
 
@@ -68,6 +70,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
       (restored ? { ...restored, rejected: restored.rejected && restored.roundSequence === round.sequence } : null) ??
       (entry ? draftFromEntry(entry, sep) : emptyDraft(type, view, todayYmd(), members.map((m) => m.id))),
   );
+  const photos = usePhotoUploads({ projectId: view.project.id, initialIds: d.attachmentIds, onIdsChange: (attachmentIds) => update({ attachmentIds }) });
   const [touched, setTouched] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
@@ -115,7 +118,13 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
       setTimeout(() => [...document.querySelectorAll<HTMLElement>(".sheet [aria-invalid='true']")].find((el) => el.offsetParent !== null)?.focus(), 0);
       return;
     }
-    const body = ev.body;
+    if (photos.busy) return;
+    if (photos.failed) {
+      setServerErrors({ photos: "Retry or remove the photo that didn't upload." });
+      return;
+    }
+    // The hook's ids, not the draft's: the draft catches up one render after an upload finishes.
+    const body = { ...ev.body, attachmentIds: photos.ids };
     noteSelfReadyChange();
     try {
       await run({ body, entry: entry?.id, rev: entry?.revision }, (k) =>
@@ -145,6 +154,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
         void refresh();
         return;
       }
+      if (err.field?.startsWith("attachmentIds.")) photos.markFailedAt(Number(err.field.split(".")[1]), err.message);
       if (err.field) setServerErrors({ [formFieldFor(err.field, d.participants)]: err.message });
       else if (err.code === "MULTI_CURRENCY_DISABLED") setServerErrors({ originalCurrency: err.message });
       else setServerErrors({ _form: err.message });
@@ -170,7 +180,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
       title={title}
       onClose={discardAndClose}
       headerAction={
-        <button type="submit" form="entry-form" className="link-btn" disabled={pending || (!collecting && d.rejected)}>
+        <button type="submit" form="entry-form" className="link-btn" disabled={pending || photos.busy || (!collecting && d.rejected)}>
           {pending ? "Saving…" : "Save"}
         </button>
       }
@@ -192,8 +202,8 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
             <button type="button" className="btn btn-ghost btn-md" onClick={discardAndClose}>
               Cancel
             </button>
-            <button type="submit" form="entry-form" className="btn btn-primary btn-md" disabled={pending || (!collecting && d.rejected)}>
-              {pending ? "Saving…" : `Save ${noun}`}
+            <button type="submit" form="entry-form" className="btn btn-primary btn-md" disabled={pending || photos.busy || (!collecting && d.rejected)}>
+              {photos.busy ? "Uploading photos…" : pending ? "Saving…" : `Save ${noun}`}
             </button>
           </div>
         </>
@@ -220,7 +230,9 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
                 className="btn btn-sm btn-ghost"
                 onClick={() => {
                   clearDraft(view.project.id, slot);
-                  setD(entry ? draftFromEntry(entry, sep) : emptyDraft(type, view, todayYmd(), members.map((m) => m.id)));
+                  const fresh = entry ? draftFromEntry(entry, sep) : emptyDraft(type, view, todayYmd(), members.map((m) => m.id));
+                  setD(fresh);
+                  photos.reset(fresh.attachmentIds);
                 }}
               >
                 Discard
@@ -300,6 +312,8 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
         </div>
 
         <SplitEditor d={d} ev={ev} view={view} errors={errors} update={update} ctx={ctx} />
+
+        <NoteAndPhotos note={d.note} onNote={(note) => update({ note })} noteError={errors.note} photos={photos} photosError={errors.photos} />
 
         <details className="ef-advanced" open={advancedOpen}>
           <summary>
