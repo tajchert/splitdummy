@@ -169,6 +169,30 @@ describe("live updates", () => {
     vi.useRealTimers();
   });
 
+  it("member endpoints hit the documented paths", async () => {
+    const seen: string[] = [];
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (input, init) => {
+      seen.push(`${init?.method ?? "GET"} ${new URL(String(input instanceof Request ? input.url : input), "http://x").pathname}`);
+      return json(200, {});
+    });
+    const api = createHttpApi({ fetch });
+    const o = { idempotencyKey: "k-123456789" };
+    await api.addMember("p_1", { displayName: "Zoe" }, o);
+    await api.renameMember("p_1", "m_1", { displayName: "Z" }, o);
+    await api.inviteMember("p_1", "m_1", { email: "z@example.com" }, o);
+    await api.cancelMemberInvite("p_1", "m_1", o);
+    await api.previewMemberInvite("p_1.secret");
+    await api.acceptMemberInvite({ token: "p_1.secretsecretsecret" }, o);
+    expect(seen).toEqual([
+      "POST /api/projects/p_1/members",
+      "PATCH /api/projects/p_1/members/m_1/name",
+      "POST /api/projects/p_1/members/m_1/invite",
+      "DELETE /api/projects/p_1/members/m_1/invite",
+      "GET /api/member-invites/p_1.secret",
+      "POST /api/member-invites/accept",
+    ]);
+  });
+
   it("caps the reconnect delay at 30 seconds plus jitter", () => {
     expect(backoffDelay(1, () => 0.5)).toBe(1000);
     expect(backoffDelay(3, () => 0.5)).toBe(4000);
