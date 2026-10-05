@@ -70,6 +70,7 @@ function YourName({ view }: { view: ProjectViewDTO }) {
   const [fieldErr, setFieldErr] = useState<string | undefined>();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (locked) return; // Enter in the read-only field still submits the form.
     const p = DisplayNameSchema.safeParse(name);
     if (!p.success) return setFieldErr(p.error.issues[0]?.message);
     if (p.data === current) return;

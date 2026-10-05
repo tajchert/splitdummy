@@ -200,8 +200,10 @@ function AddPersonSheet({ view, onClose }: { view: ProjectViewDTO; onClose: () =
     const out: { result?: AddMemberResultDTO } = {};
     const ok = await m.run(parsed.data, async (k) => (out.result = await api.addMember(view.project.id, parsed.data, { idempotencyKey: k })));
     if (!ok) return;
+    // emailSent is null when no email was involved or the request was a replay: don't claim a send.
     if (out.result?.emailSent === false) toast(`Added ${parsed.data.displayName}, but the email didn't send. Use Resend.`, "info");
-    else toast(parsed.data.email ? `Invitation sent to ${parsed.data.email}` : `Added ${parsed.data.displayName}`);
+    else if (out.result?.emailSent === true) toast(`Invitation sent to ${parsed.data.email}`);
+    else toast(`Added ${parsed.data.displayName}`);
     onClose();
   };
   return (
@@ -284,13 +286,15 @@ function ManageMemberSheet({ view, member, onClose, onRemove }: { view: ProjectV
           </button>
         )}
         {canRemove ? (
-          <button type="button" className="btn btn-ghost btn-md danger-text" onClick={onRemove}>
+          <button type="button" className="btn btn-ghost btn-md danger-text" disabled={m.pending} onClick={onRemove}>
             <Icon name="person_remove" size={18} />
             Remove from group
           </button>
-        ) : (
-          <p className="tiny muted">{member.referenced ? "In entries, so they can't be removed." : "Members are locked while settling."}</p>
-        )}
+        ) : member.referenced ? (
+          <p className="tiny muted">In entries, so they can't be removed.</p>
+        ) : settling ? (
+          <p className="tiny muted">Members are locked while settling.</p>
+        ) : null}
         {m.error && (
           <span className="field-error" role="alert">
             <Icon name="error" size={16} />

@@ -10,7 +10,7 @@ import { AppRoutes } from "../App";
 const TOKEN = "p_porto.demo-invite-token-0001";
 const MAYA = "pr_maya"; // verified account, not a member of Porto in the mock seed
 
-function renderAt(api: MockApi, path: string) {
+function renderAt(api: MockApi, path: string | { pathname: string; search?: string; state?: unknown }) {
   return render(
     <ApiProvider api={api}>
       <ToastProvider>
@@ -60,13 +60,25 @@ describe("join by link", () => {
     expect(await screen.findByText("Check your inbox")).toBeTruthy();
   });
 
-  it("returning with auto=1 joins exactly once", async () => {
+  it("returning from the magic link with auto=1 joins exactly once", async () => {
     const api = mockAs(MAYA);
     const join = vi.spyOn(api, "join");
-    renderAt(api, `/join/${encodeURIComponent(TOKEN)}?name=Maya&auto=1`);
+    renderAt(api, { pathname: `/join/${encodeURIComponent(TOKEN)}`, search: "?name=Maya&auto=1", state: { justSignedIn: true } });
     await waitFor(() => expect(join).toHaveBeenCalledTimes(1));
     expect(join.mock.calls[0]![0]).toMatchObject({ displayName: "Maya" });
     await new Promise((r) => setTimeout(r, 50));
     expect(join).toHaveBeenCalledTimes(1);
+  });
+
+  it("a crafted auto=1 link without the magic-link hand-off does not join; it prefills the name and waits for a click", async () => {
+    const api = mockAs(MAYA);
+    const join = vi.spyOn(api, "join");
+    renderAt(api, `/join/${encodeURIComponent(TOKEN)}?name=Mia&auto=1`);
+    const button = await screen.findByRole("button", { name: "Join" });
+    expect((screen.getByLabelText("Your name") as HTMLInputElement).value).toBe("Mia");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(join).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    await waitFor(() => expect(join).toHaveBeenCalledTimes(1));
   });
 });
