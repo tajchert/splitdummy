@@ -20,6 +20,23 @@ const entryBody = {
 };
 
 describe("http client", () => {
+  it("uploads a photo as its raw bytes and retries with the same key", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(new Response("", { status: 503 }))
+      .mockResolvedValueOnce(json(201, { id: "att_1", contentType: "image/webp", bytes: 3, width: 1, height: 1 }));
+    const api = createHttpApi({ fetch, retryDelayMs: () => 0 });
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: "image/webp" });
+    await expect(api.uploadAttachment("p_1", blob, { idempotencyKey: "key-photo" })).resolves.toMatchObject({ id: "att_1" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    for (const [url, init] of fetch.mock.calls) {
+      expect(url).toBe("/api/projects/p_1/attachments");
+      expect(init?.body).toBe(blob);
+      expect((init?.headers as Record<string, string>)["Content-Type"]).toBe("image/webp");
+      expect((init?.headers as Record<string, string>)["Idempotency-Key"]).toBe("key-photo");
+    }
+    expect(api.attachmentUrl("p_1", "att_1")).toBe("/api/projects/p_1/attachments/att_1");
+  });
   it("does not retry API key creation when the response is lost", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockRejectedValue(new TypeError("offline"));
     const api = createHttpApi({ fetch, retryDelayMs: () => 0 });

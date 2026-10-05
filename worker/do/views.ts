@@ -1,6 +1,7 @@
 /** Read-model builders: storage rows → api.ts DTOs. Pure reads; never mutate. */
 import type {
   AmountSplitDTO,
+  AttachmentDTO,
   AuditEventDTO,
   BalanceDTO,
   CurrencySubtotalDTO,
@@ -18,6 +19,7 @@ import type {
 } from "@shared/api";
 import { computeBalances, planSettlement, type BalanceEntry, type MemberBalance, type Shares } from "@shared/money";
 import type {
+  AttachmentRow,
   AuditRow,
   InstructionRow,
   InvitationRow,
@@ -141,6 +143,13 @@ export function auditDto(a: AuditRow): AuditEventDTO {
   };
 }
 
+export function attachmentDto(a: AttachmentRow): AttachmentDTO {
+  return { id: a.id, contentType: a.content_type, bytes: a.bytes, width: a.width, height: a.height };
+}
+
+/** Snapshots frozen before notes/photos existed lack those fields. */
+const withEntryDefaults = (e: EntryDTO): EntryDTO => ({ ...e, note: e.note ?? null, attachments: e.attachments ?? [] });
+
 export function entryDto(e: LoadedEntry): EntryDTO {
   const r = e.row;
   const split = (s: { member_id: string; original_amount: string; base_amount: string }): AmountSplitDTO => ({
@@ -180,6 +189,8 @@ export function entryDto(e: LoadedEntry): EntryDTO {
         : null,
     correctedEntryId: r.corrected_entry_id,
     correctedRoundId: r.corrected_round_id,
+    note: r.note,
+    attachments: e.attachments.map(attachmentDto),
     revision: r.revision,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -299,6 +310,7 @@ export function roundView(store: Store, round: RoundRow): RoundViewDTO {
   }
   const snap = snapshotOf(store, round.id);
   if (!snap) throw new Error(`missing snapshot for frozen round ${round.id}`);
+  const entries = snap.entries.map(withEntryDefaults);
   const instructions = store.instructions(round.id);
   const progress = new Map<string, bigint>();
   for (const i of instructions) {
@@ -309,15 +321,15 @@ export function roundView(store: Store, round: RoundRow): RoundViewDTO {
   }
   return {
     round: roundDto(round),
-    entries: snap.entries,
+    entries,
     readiness: snap.readiness,
     balances: snap.balances.map((b) => {
       const p = progress.get(b.memberId) ?? 0n;
       return { ...b, confirmedProgress: p.toString(), remaining: (BigInt(b.net) - p).toString() };
     }),
     instructions: instructions.map(instructionDto),
-    totals: totals(snap.entries),
-    currencySubtotals: currencySubtotals(snap.entries),
+    totals: totals(entries),
+    currencySubtotals: currencySubtotals(entries),
   };
 }
 

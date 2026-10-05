@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateEntry, formFieldFor, showCurrencySelector, type EntryDraft, type FormContext } from "./entryForm";
+import { evaluateEntry, formFieldFor, showCurrencySelector, withDraftDefaults, type EntryDraft, type FormContext } from "./entryForm";
 
 const ctx = (over: Partial<FormContext> = {}): FormContext => ({
   baseCurrency: "EUR",
@@ -24,6 +24,8 @@ const draft = (over: Partial<EntryDraft> = {}): EntryDraft => ({
   rate: "",
   baseAmount: "",
   rateEdited: false,
+  note: "",
+  attachmentIds: [],
   ...over,
 });
 
@@ -131,5 +133,29 @@ describe("evaluateEntry", () => {
     expect(formFieldFor("participants.1.amount", ["m_a", "m_b"])).toBe("exact.m_b");
     expect(formFieldFor("conversion.rate", [])).toBe("rate");
     expect(formFieldFor("description", [])).toBe("description");
+  });
+});
+
+describe("note and photos in drafts", () => {
+  it("sends the trimmed note and photo ids; an empty note becomes null", () => {
+    const d = draft({ note: "  Tip incl.  ", attachmentIds: ["att_1", "att_2"] });
+    expect(evaluateEntry(d, ctx()).body).toMatchObject({ note: "Tip incl.", attachmentIds: ["att_1", "att_2"] });
+    expect(evaluateEntry({ ...d, note: "   " }, ctx()).body).toMatchObject({ note: null });
+  });
+
+  it("flags a note over 1000 characters", () => {
+    const ev = evaluateEntry(draft({ note: "x".repeat(1001) }), ctx());
+    expect(ev.errors.note).toBe("Keep the note under 1000 characters");
+    expect(ev.body).toBeNull();
+  });
+
+  it("fills defaults for drafts saved before notes existed", () => {
+    const { note: _n, attachmentIds: _a, ...old } = draft();
+    expect(withDraftDefaults(old)).toMatchObject({ note: "", attachmentIds: [] });
+  });
+
+  it("maps server photo errors onto the photos field", () => {
+    expect(formFieldFor("attachmentIds.2", [])).toBe("photos");
+    expect(formFieldFor("note", [])).toBe("note");
   });
 });

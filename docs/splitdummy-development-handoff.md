@@ -55,7 +55,7 @@ Success means a participant can understand their position, add a normal expense 
 
 ### Deferred
 
-Receipt attachments/OCR, AI entry, automatic market FX rates, percentage/share/itemized splits, multiple payers on one expense, partial repayments, bank connectivity, payment processing, recurring expense automation, native mobile applications, cross-project simplification, and automatic offline submission.
+Receipt OCR (receipt photos shipped; reading them automatically is still deferred), AI entry, automatic market FX rates, percentage/share/itemized splits, multiple payers on one expense, partial repayments, bank connectivity, payment processing, recurring expense automation, native mobile applications, cross-project simplification, and automatic offline submission.
 
 Keep the database model capable of multiple contributions, but expose one payer in the first-release form. Do not delay the release to implement deferred features.
 
@@ -225,7 +225,7 @@ Design for small phone screens, keyboard navigation, screen readers, meaningful 
 | Live updates | Durable Object WebSockets with hibernation; reconnect fetches authoritative state |
 | Background jobs | Queues consumer Worker for notifications and directory projections |
 | Email | Cloudflare Email Service for transactional sign-in/recovery and optional notifications; beta dependency |
-| File storage | Private R2 for backup/export artifacts; receipt uploads deferred |
+| File storage | Private R2 for backup/export artifacts and receipt photos |
 | Protection | Turnstile with server validation, endpoint limits, Cloudflare DNS/TLS |
 | Operations | Wrangler, Workers Logs, separate staging/production bindings and environments |
 

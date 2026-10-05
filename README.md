@@ -78,7 +78,7 @@ flowchart LR
   W -- RPC --> DO[(ProjectDO<br/>one per group<br/>SQLite)]
   W --> D1[(D1<br/>accounts · sessions<br/>directory)]
   DO -- outbox --> Q[[Queue]] --> E[Email]
-  W -. daily cron .-> R2[(R2 backups)]
+  W -. daily cron .-> R2[(R2 backups and receipt photos)]
 ```
 
 - **Exact money:** amounts are `bigint` minor units and exchange rates are exact rationals. There are no floats anywhere near a balance.
@@ -113,9 +113,17 @@ npm run typecheck
 Splitdummy runs entirely on Cloudflare. Before you deploy:
 
 1. In `wrangler.jsonc`, set your own `account_id`, domains, `APP_ORIGIN` and `EMAIL_FROM`.
-2. Create the resources: a D1 database (put its ID in the config), the Queues and dead-letter queues, an R2 bucket, and a Turnstile widget (put its site key in `wrangler.jsonc` and `scripts/deploy.sh`).
+2. Create the resources: a D1 database (put its ID in the config), the Queues and dead-letter queues, two R2 buckets (`splitdummy-backups` and `splitdummy-attachments`, plus the `splitdummy-staging-` pair if you deploy staging), and a Turnstile widget (put its site key in `wrangler.jsonc` and `scripts/deploy.sh`).
 3. Enable [Email Service](https://developers.cloudflare.com/email-service/) sending for your domain.
 4. Replace `src/web/pages/Privacy.tsx`: it is the policy of splitdummy.app, not of your instance. Request analytics go to the Analytics Engine datasets named in `wrangler.jsonc`, which are created on first write.
+
+```bash
+npx wrangler r2 bucket create splitdummy-backups
+npx wrangler r2 bucket create splitdummy-attachments
+# staging, if you use it
+npx wrangler r2 bucket create splitdummy-staging-backups
+npx wrangler r2 bucket create splitdummy-staging-attachments
+```
 
 ```bash
 scripts/deploy.sh staging --init-secrets   # first deploy of an environment

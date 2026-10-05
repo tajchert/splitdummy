@@ -119,6 +119,8 @@ describe("account deletion", () => {
     const annInJoined = await join(bob, joinedId, "Ann", ann);
     await testEnv.BACKUPS.put(`projects/${ownedId}/2026-10-01T00:00:00.000Z.json`, "{}");
     await testEnv.BACKUPS.put(`projects/${joinedId}/2026-10-01T00:00:00.000Z.json`, "{}");
+    await testEnv.ATTACHMENTS.put(`projects/${ownedId}/attachments/att_owned`, "x");
+    await testEnv.ATTACHMENTS.put(`projects/${joinedId}/attachments/att_joined`, "y");
 
     expect(await preview(ann)).toEqual({
       ownedProjects: [{ id: ownedId, name: "Ann's trip", memberCount: 3 }],
@@ -162,6 +164,7 @@ describe("account deletion", () => {
 
     expect((await deleteAccount(ann, {})).status).toBe(422);
     const res = await deleteAccount(ann);
+    expect(res.headers.get("clear-site-data")).toBe('"cache"');
     expect(await json(res)).toEqual({ ok: true });
     expect(res.headers.getSetCookie().some((c) => /sd_session=;/.test(c) && /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c))).toBe(true);
 
@@ -179,6 +182,8 @@ describe("account deletion", () => {
     expect(bobGroups.map((g) => g.id)).toEqual([joinedId]);
     expect((await testEnv.BACKUPS.list({ prefix: `projects/${ownedId}/` })).objects).toHaveLength(0);
     expect((await testEnv.BACKUPS.list({ prefix: `projects/${joinedId}/` })).objects).toHaveLength(1);
+    expect((await testEnv.ATTACHMENTS.list({ prefix: `projects/${ownedId}/` })).objects).toHaveLength(0);
+    expect((await testEnv.ATTACHMENTS.list({ prefix: `projects/${joinedId}/` })).objects).toHaveLength(1);
     expect(bobInOwned.memberId).toMatch(/^m_/);
 
     // The joined group keeps her as an anonymous member with all money references intact.

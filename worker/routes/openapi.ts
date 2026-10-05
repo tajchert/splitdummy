@@ -20,6 +20,7 @@ const round = object({ id, sequence: z.number(), status: z.enum(["COLLECTING", "
   earlyFreezeReason: nullableText, frozenByMemberId: nullableText, scheduledFreezeDate: nullableText,
   scheduledFreezeTimeZone: nullableText, scheduledFreezeAt: nullableText, frozenBySchedule: z.boolean() });
 const amounts = z.array(object({ memberId: id, originalAmount: money, baseAmount: money }));
+const attachment = object({ id, contentType: z.enum(api.ATTACHMENT_TYPES), bytes: z.number(), width: z.number(), height: z.number() });
 const entry = object({ id, roundId: id, type: z.enum(["EXPENSE", "REFUND", "ADJUSTMENT"]), creatorMemberId: id,
   lastEditedByMemberId: nullableText, occurredAt: z.string(), description: z.string(), originalAmount: money, originalCurrency: z.string(),
   originalExponent: z.number(), baseAmount: money, baseCurrency: z.string(), baseExponent: z.number(),
@@ -27,7 +28,8 @@ const entry = object({ id, roundId: id, type: z.enum(["EXPENSE", "REFUND", "ADJU
     rateSource: z.enum(["IDENTITY", "OWNER_DEFAULT", "ENTRY_OVERRIDE", "ACTUAL_CHARGE"]), rateSetByMemberId: nullableText,
     rateSetAt: nullableText, note: nullableText }), payerMemberId: nullableText, splitMode: z.enum(["EQUAL", "EXACT"]).nullable(),
   contributions: amounts, allocations: amounts, adjustmentEffects: amounts.nullable(), correctedEntryId: nullableText,
-  correctedRoundId: nullableText, revision: z.number(), createdAt: z.string(), updatedAt: z.string() });
+  correctedRoundId: nullableText, revision: z.number(), createdAt: z.string(), updatedAt: z.string(),
+  note: nullableText, attachments: z.array(attachment) });
 const instruction = object({ id, roundId: id, fromMemberId: id, toMemberId: id, amount: money, currency: z.string(), exponent: z.number(),
   state: z.enum(["PROPOSED", "SENT", "CONFIRMED", "DISPUTED"]), sentAt: nullableText, confirmedAt: nullableText,
   disputedAt: nullableText, disputeNote: nullableText, revision: z.number() });
@@ -53,6 +55,8 @@ interface Operation {
   body?: z.ZodType;
   response?: z.ZodType;
   created?: boolean;
+  rawBody?: readonly string[];
+  binaryResponse?: readonly string[];
 }
 const operations: Partial<Record<keyof typeof api.ENDPOINTS, Operation>> = {
   me: { summary: "Get your account identity", response: object({ principalId: id, kind: z.enum(["ACCOUNT", "GUEST"]), email: nullableText, displayName: nullableText }) },
@@ -74,8 +78,8 @@ const operations: Partial<Record<keyof typeof api.ENDPOINTS, Operation>> = {
   renameMe: { summary: "Change your name in a group", description: "403 when the owner has locked names (project.membersCanRename = false); the owner can always rename.", body: api.RenameMemberSchema, response: member },
   transferOwnership: { summary: "Offer group ownership to a member", description: "Owner only. Recipient must accept the offer.", body: api.TransferOwnershipSchema, response: project },
   acceptOwnership: { summary: "Accept an ownership offer", response: project },
-  createEntry: { summary: "Add an expense or refund", description: "Collecting round only. Amounts are strings in minor units. EQUAL omits participant amounts; EXACT amounts must sum to originalAmount. IDENTITY is for the base currency.", body: api.EntryInputSchema, response: entry, created: true },
-  updateEntry: { summary: "Edit an expense or refund", description: "Collecting round only. Creator or owner; send the latest entry.revision as expectedRevision.", body: api.UpdateEntrySchema, response: entry },
+  createEntry: { summary: "Add an expense or refund", description: "Collecting round only. Amounts are strings in minor units. EQUAL omits participant amounts; EXACT amounts must sum to originalAmount. IDENTITY is for the base currency. Optional note (≤ 1000 characters) and attachmentIds (≤ 5, from uploadAttachment).", body: api.EntryInputSchema, response: entry, created: true },
+  updateEntry: { summary: "Edit an expense or refund", description: "Collecting round only. Creator or owner; send the latest entry.revision as expectedRevision. Omitting note or attachmentIds keeps them; null or [] clears them.", body: api.UpdateEntrySchema, response: entry },
   deleteEntry: { summary: "Delete an expense or refund", description: "Collecting round only. Creator or owner; send the latest entry.revision as expectedRevision.", body: api.DeleteEntrySchema, response: ok },
   createAdjustment: { summary: "Correct a historical entry", description: "Owner only. Signed base effects must sum to zero. Creates a correction in the current collecting round.", body: api.AdjustmentInputSchema, response: entry, created: true },
   readiness: { summary: "Mark yourself ready or not ready", body: api.ReadinessSchema, response: readiness },
@@ -91,6 +95,8 @@ const operations: Partial<Record<keyof typeof api.ENDPOINTS, Operation>> = {
     id, at: z.string(), actorMemberId: nullableText, action: z.string(), roundId: nullableText, entityId: nullableText,
     summary: z.string(), details: z.record(z.string(), z.unknown()).nullable() })) }) },
   export: { summary: "Export the group as CSV" },
+  uploadAttachment: { summary: "Upload a receipt photo", description: "Send the image bytes as the request body with Content-Type image/jpeg or image/webp (at most 1.5 MB and 4096 px per side). Photo metadata, including EXIF orientation, is removed, so upload upright images. The photo is visible only to you until you attach it with attachmentIds on createEntry or updateEntry; unattached uploads are deleted after 24 hours, by a nightly cleanup. Collecting round only.", rawBody: api.ATTACHMENT_TYPES, response: attachment, created: true },
+  getAttachment: { summary: "Download a receipt photo", description: "Members see photos of saved entries; a not-yet-attached upload only its uploader.", binaryResponse: api.ATTACHMENT_TYPES },
 };
 
 function jsonSchema(schema: z.ZodType, io: "input" | "output" = "output") {
@@ -98,7 +104,7 @@ function jsonSchema(schema: z.ZodType, io: "input" | "output" = "output") {
   return result;
 }
 const errors = Object.fromEntries(Object.entries({ 401: "Invalid, expired or revoked key", 403: "Read-only key or insufficient permissions",
-  404: "Unavailable or not a member", 409: "Stale revision, frozen round, state or idempotency conflict", 422: "Invalid input", 429: "Rate limited", 500: "Unexpected error" })
+  404: "Unavailable or not a member", 409: "Stale revision, frozen round, state or idempotency conflict", 413: "Payload too large (photo uploads over 1.5 MB)", 422: "Invalid input", 429: "Rate limited", 500: "Unexpected error" })
   .map(([status, description]) => [status, { description, content: { "application/json": { schema: jsonSchema(error) } } }]));
 
 export function openApiDocument(origin: string) {
@@ -119,10 +125,16 @@ export function openApiDocument(origin: string) {
       operationId: key, summary: definition.summary,
       description: [definition.description, method !== "GET" ? "Requires a read/write API key. Existing group roles still apply." : "Available with read-only or read/write keys."].filter(Boolean).join(" "),
       security: [{ bearerAuth: [] }], parameters,
-      ...(definition.body ? { requestBody: { required: true, content: { "application/json": { schema: jsonSchema(definition.body, "input") } } } } : {}),
+      ...(definition.body
+        ? { requestBody: { required: true, content: { "application/json": { schema: jsonSchema(definition.body, "input") } } } }
+        : definition.rawBody
+          ? { requestBody: { required: true, content: Object.fromEntries(definition.rawBody.map((t) => [t, { schema: { type: "string", format: "binary" } }])) } }
+          : {}),
       responses: { [definition.created ? "201" : "200"]: { description: "Success", content: key === "export"
         ? { "text/csv": { schema: { type: "string" } } }
-        : { "application/json": { schema: jsonSchema(definition.response ?? ok) } } }, ...errors },
+        : definition.binaryResponse
+          ? Object.fromEntries(definition.binaryResponse.map((t) => [t, { schema: { type: "string", format: "binary" } }]))
+          : { "application/json": { schema: jsonSchema(definition.response ?? ok) } } }, ...errors },
     };
   }
   return { openapi: "3.1.0", info: { title: "Splitdummy API", version: "1.0.0",

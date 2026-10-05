@@ -1284,6 +1284,84 @@
 .ef-advanced-body {
   padding-top: 14px;
 }
+.ef-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ef-note {
+  field-sizing: content;
+  min-height: calc(2lh + 20px);
+  max-height: calc(10lh + 20px);
+  resize: vertical;
+}
+.ef-photos {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.photo-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.photo-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--line);
+}
+.photo-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.photo-tile.is-compressing img,
+.photo-tile.is-uploading img,
+.photo-tile.is-failed img {
+  opacity: 0.45;
+}
+.photo-tile-status,
+.photo-tile-error {
+  position: absolute;
+  inset: auto 4px 4px 4px;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+}
+.photo-tile-error {
+  color: var(--red);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+/* Keep long messages inside the tile so Retry stays reachable; the full text is in the title. */
+.photo-tile-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.25;
+}
+.photo-tile-note {
+  color: var(--ink2);
+}
+.photo-tile-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--surface);
+  border-radius: 999px;
+}
 .fx {
   background: var(--blue-soft);
   border-radius: var(--r-lg);
@@ -2140,3 +2218,60 @@
 .install-app { background: transparent; }
 .install-app summary { cursor: pointer; }
 .install-app-help { margin-top: 8px; }
+
+.detail-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.photo-thumb {
+  all: unset;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+}
+.photo-thumb:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photo-viewer {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #000;
+}
+.photo-viewer[open] {
+  display: flex;
+  flex-direction: column;
+}
+.photo-viewer::backdrop {
+  background: rgb(0 0 0 / 0.9);
+}
+.photo-viewer-img {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+}
+.photo-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  color: #fff;
+}
+.photo-viewer-bar .icon-btn,
+.photo-viewer-bar .link-btn {
+  color: #fff;
+}

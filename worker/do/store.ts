@@ -1,4 +1,5 @@
 /** Typed row access over the DO's SQLite storage. Synchronous; safe inside transactionSync. */
+import type { AttachmentContentType } from "@shared/api";
 
 export interface ProjectRow {
   id: string;
@@ -87,6 +88,7 @@ export interface EntryRow {
   split_mode: "EQUAL" | "EXACT" | null;
   corrected_entry_id: string | null;
   corrected_round_id: string | null;
+  note: string | null;
   revision: number;
   deleted: number;
   deleted_at: string | null;
@@ -108,12 +110,27 @@ export interface EffectRow {
   base_amount: string;
 }
 
+export interface AttachmentRow {
+  id: string;
+  /** NULL while pending (uploaded, not yet saved with an entry). */
+  entry_id: string | null;
+  uploader_member_id: string;
+  content_type: AttachmentContentType;
+  bytes: number;
+  width: number;
+  height: number;
+  position: number;
+  created_at: string;
+  attached_at: string | null;
+}
+
 /** An entry with its child rows. */
 export interface LoadedEntry {
   row: EntryRow;
   contributions: SplitRow[];
   allocations: SplitRow[];
   effects: EffectRow[];
+  attachments: AttachmentRow[];
 }
 
 export interface RateRow {
@@ -252,11 +269,21 @@ export class Store {
     const contributions = byEntry<SplitRow>("contributions");
     const allocations = byEntry<SplitRow>("allocations");
     const effects = byEntry<EffectRow>("adjustment_effects");
+    const attachments = new Map<string, AttachmentRow[]>();
+    for (const a of this.all<AttachmentRow>(
+      "SELECT t.* FROM attachments t JOIN entries e ON e.id = t.entry_id WHERE e.round_id = ? AND e.deleted = 0 ORDER BY t.position",
+      roundId,
+    )) {
+      const list = attachments.get(a.entry_id!);
+      if (list) list.push(a);
+      else attachments.set(a.entry_id!, [a]);
+    }
     return rows.map((row) => ({
       row,
       contributions: contributions.get(row.id) ?? [],
       allocations: allocations.get(row.id) ?? [],
       effects: effects.get(row.id) ?? [],
+      attachments: attachments.get(row.id) ?? [],
     }));
   }
 
@@ -268,7 +295,12 @@ export class Store {
       contributions: this.all<SplitRow>("SELECT * FROM contributions WHERE entry_id = ? ORDER BY member_id", id),
       allocations: this.all<SplitRow>("SELECT * FROM allocations WHERE entry_id = ? ORDER BY member_id", id),
       effects: this.all<EffectRow>("SELECT * FROM adjustment_effects WHERE entry_id = ? ORDER BY member_id", id),
+      attachments: this.all<AttachmentRow>("SELECT * FROM attachments WHERE entry_id = ? ORDER BY position", id),
     };
+  }
+
+  attachment(id: string): AttachmentRow | undefined {
+    return this.first<AttachmentRow>("SELECT * FROM attachments WHERE id = ?", id);
   }
 
   rates(): RateRow[] {

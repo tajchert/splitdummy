@@ -219,6 +219,27 @@ const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX members_invite_secret ON members(invite_secret_hash) WHERE invite_secret_hash IS NOT NULL;
   ALTER TABLE project ADD COLUMN members_can_rename INTEGER NOT NULL DEFAULT 1;
   `,
+  `
+  ALTER TABLE entries ADD COLUMN note TEXT;
+  CREATE TABLE attachments (
+    id TEXT PRIMARY KEY,
+    entry_id TEXT REFERENCES entries(id),
+    uploader_member_id TEXT NOT NULL REFERENCES members(id),
+    content_type TEXT NOT NULL CHECK (content_type IN ('image/webp','image/jpeg')),
+    bytes INTEGER NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    attached_at TEXT
+  );
+  CREATE INDEX attachments_entry ON attachments(entry_id, position);
+  CREATE INDEX attachments_pending ON attachments(uploader_member_id) WHERE entry_id IS NULL;
+  CREATE TABLE attachment_trash (
+    attachment_id TEXT PRIMARY KEY,
+    trashed_at TEXT NOT NULL
+  );
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

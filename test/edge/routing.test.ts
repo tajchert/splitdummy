@@ -29,6 +29,8 @@ const validEntry = {
 describe("project routing", () => {
   it("every ENDPOINTS entry is routed (edge-handled or DO-mapped)", () => {
     const edgeHandled = [
+      "uploadAttachment", // Photos: raw-body upload and byte download in routes/attachments.ts.
+      "getAttachment",
       "config",
       "me",
       "updateMe",

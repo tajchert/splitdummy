@@ -19,11 +19,12 @@ export interface CallInit {
   headers?: Record<string, string>;
   base?: string;
   env?: Env;
+  raw?: { body: Uint8Array; contentType: string };
 }
 
 /** Calls the Worker's fetch in-process with sensible same-origin defaults. */
 export async function call(path: string, init: CallInit = {}): Promise<Response> {
-  const method = init.method ?? (init.body !== undefined ? "POST" : "GET");
+  const method = init.method ?? (init.body !== undefined || init.raw ? "POST" : "GET");
   const headers = new Headers(init.headers);
   headers.set("cf-connecting-ip", `10.0.${rand255()}.${rand255()}`);
   if (init.origin !== null && method !== "GET") headers.set("origin", init.origin ?? ORIGIN);
@@ -31,10 +32,14 @@ export async function call(path: string, init: CallInit = {}): Promise<Response>
   if (init.idempotencyKey !== null && method !== "GET") {
     headers.set("idempotency-key", init.idempotencyKey ?? crypto.randomUUID());
   }
-  let body: string | undefined;
+  let body: BodyInit | undefined;
   if (init.body !== undefined) {
     body = typeof init.body === "string" ? init.body : JSON.stringify(init.body);
     headers.set("content-type", "application/json");
+  }
+  if (init.raw) {
+    body = init.raw.body;
+    headers.set("content-type", init.raw.contentType);
   }
   const ctx = createExecutionContext();
   const res = await worker.fetch(new Request(`${init.base ?? ORIGIN}${path}`, { method, headers, body }), init.env ?? testEnv, ctx);

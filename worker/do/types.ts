@@ -17,6 +17,10 @@ export interface Principal {
 export type DoOp =
   | "createProject" // body: CreateProjectSchema (minus turnstileToken) + { projectId }
   | "getProject"
+  | "registerAttachment" // body { contentType, bytes, width, height, sha256 } (edge-measured) → 201 AttachmentDTO; pending until an entry links it
+  | "readAttachment" // read; params.attachmentId → AttachmentDTO when visible to the caller, else 404
+  | "takeAttachmentTrash" // internal (principal null, edge cron): expires pending uploads → { ids } of R2 objects to delete
+  | "ackAttachmentTrash" // internal (principal null, edge cron): body { ids } deleted from R2 → forgets them
   | "updateSettings"
   | "putRate"
   | "deleteRate"

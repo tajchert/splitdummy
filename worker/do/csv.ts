@@ -46,6 +46,8 @@ const HEADER = [
   "updated_at",
   "sent_at",
   "confirmed_at",
+  "note",
+  "photo_count",
 ];
 
 export function buildCsv(views: RoundViewDTO[], names: Map<string, string>): string {
@@ -101,6 +103,8 @@ export function buildCsv(views: RoundViewDTO[], names: Map<string, string>): str
           e.updatedAt,
           "",
           "",
+          e.note,
+          e.attachments.length,
         ]
           .map(csvCell)
           .join(","),
@@ -145,6 +149,8 @@ function transferRow(r: RoundViewDTO["round"], i: InstructionDTO, label: (id: st
     "",
     i.sentAt,
     i.confirmedAt,
+    "",
+    "",
   ]
     .map(csvCell)
     .join(",");
