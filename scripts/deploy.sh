@@ -14,6 +14,7 @@ case "$ENV_NAME" in
   *) echo "usage: $0 staging|production [--init-secrets]" >&2; exit 1 ;;
 esac
 
+npm run cf-typegen >/dev/null
 npx tsc -b
 npx vite build
 # The Vite plugin copies local .dev.vars into the build output for `vite preview`; never ship it.

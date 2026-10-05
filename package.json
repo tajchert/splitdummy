@@ -14,6 +14,7 @@
     "e2e": "playwright test",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "cf-typegen": "wrangler types worker/worker-configuration.d.ts",
+    "postinstall": "npm run cf-typegen",
     "deploy": "scripts/deploy.sh production",
     "deploy:staging": "scripts/deploy.sh staging"
   },
