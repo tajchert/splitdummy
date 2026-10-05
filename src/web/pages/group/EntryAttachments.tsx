@@ -65,6 +65,7 @@ export function PhotoViewer({ urls, index, onIndex, onClose }: { urls: string[];
       closeRef.current();
     };
     const onCancel = (e: Event) => {
+      if (e.target !== d) return; // only Escape on the viewer itself, not a bubbled "cancel"
       e.preventDefault();
       finish();
     };

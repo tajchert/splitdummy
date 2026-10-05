@@ -40,6 +40,8 @@ export function Sheet({ title, onClose, headerAction, footer, children, size = "
       }
     }
     const onCancel = (e: Event) => {
+      // Only Escape on the dialog itself. A dismissed file picker fires a bubbling "cancel" too.
+      if (e.target !== d) return;
       e.preventDefault();
       closeRef.current();
     };
@@ -105,6 +107,7 @@ export function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCanc
       d.setAttribute("open", "");
     }
     const onC = (e: Event) => {
+      if (e.target !== d) return; // see Sheet
       e.preventDefault();
       cancelRef.current();
     };

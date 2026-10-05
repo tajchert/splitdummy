@@ -323,4 +323,19 @@ describe("expense form", () => {
     expect((screen.getByLabelText("What was it?", { selector: "input" }) as HTMLInputElement).value).toBe("Lift passes");
     await waitFor(() => expect(Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)!).some((k) => k.startsWith(`splitdummy-draft:${pid}`))).toBe(true));
   });
+
+  it("stays open when the photo picker is cancelled, and still closes on Escape", async () => {
+    const view = await newSingleCurrencyGroup(api);
+    renderAt(api, `/g/${view.project.id}/new`);
+    await screen.findByText("New expense");
+    // Browsers fire a bubbling "cancel" at a file input when its picker is dismissed.
+    photoInput().dispatchEvent(new Event("cancel", { bubbles: true, cancelable: true }));
+    // Give a (wrong) close time to navigate away before asserting it didn't.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(screen.queryByText("New expense")).not.toBeNull();
+    expect(photoInput()).not.toBeNull();
+    // Escape on the sheet itself still closes it.
+    document.querySelector("dialog.sheet")!.dispatchEvent(new Event("cancel", { cancelable: true }));
+    await waitFor(() => expect(screen.queryByText("New expense")).toBeNull());
+  });
 });
