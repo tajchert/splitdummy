@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { apiKeyAuth, originGuard } from "./auth/middleware";
 import type { AppEnv } from "./lib/context";
+import { requestAnalytics } from "./lib/analytics";
 import { ApiError } from "./lib/errors";
 import { logError } from "./lib/log";
 import { handleQueue } from "./queue/consumer";
@@ -18,6 +19,7 @@ export { ProjectDO } from "./do/ProjectDO";
 
 export const app = new Hono<AppEnv>();
 
+app.use("/api/*", requestAnalytics);
 app.use("/api/*", async (c, next) => {
   const requestId = `req_${crypto.randomUUID()}`;
   c.set("requestId", requestId);

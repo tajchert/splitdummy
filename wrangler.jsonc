@@ -5,7 +5,14 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
+  // Workers Logs (7 days), automatic traces, and Issues (grouped exceptions, 5xx and error logs).
+  // Legacy sign-in links carry a token in the query string, so it never reaches logs or traces.
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "traces": { "enabled": true },
+    "issues": { "enabled": true }
+  },
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
@@ -34,8 +41,11 @@
     { "name": "RL_SIGNIN_EMAIL", "namespace_id": "1002", "simple": { "limit": 3, "period": 60 } },
     { "name": "RL_CREATE_PROJECT", "namespace_id": "1003", "simple": { "limit": 5, "period": 60 } },
     { "name": "RL_JOIN", "namespace_id": "1004", "simple": { "limit": 10, "period": 60 } },
-    { "name": "RL_MUTATION", "namespace_id": "1005", "simple": { "limit": 120, "period": 60 } }
+    { "name": "RL_MUTATION", "namespace_id": "1005", "simple": { "limit": 120, "period": 60 } },
+    { "name": "RL_CLIENT_ERROR", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } }
   ],
+  // One data point per API request (endpoint, status, latency); no user identifiers.
+  "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "splitdummy_requests" }],
   "durable_objects": {
     "bindings": [{ "name": "PROJECT", "class_name": "ProjectDO" }]
   },
@@ -80,8 +90,10 @@
         { "name": "RL_SIGNIN_EMAIL", "namespace_id": "2002", "simple": { "limit": 3, "period": 60 } },
         { "name": "RL_CREATE_PROJECT", "namespace_id": "2003", "simple": { "limit": 5, "period": 60 } },
         { "name": "RL_JOIN", "namespace_id": "2004", "simple": { "limit": 10, "period": 60 } },
-        { "name": "RL_MUTATION", "namespace_id": "2005", "simple": { "limit": 120, "period": 60 } }
+        { "name": "RL_MUTATION", "namespace_id": "2005", "simple": { "limit": 120, "period": 60 } },
+        { "name": "RL_CLIENT_ERROR", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } }
       ],
+      "analytics_engine_datasets": [{ "binding": "ANALYTICS", "dataset": "splitdummy_staging_requests" }],
       "durable_objects": {
         "bindings": [{ "name": "PROJECT", "class_name": "ProjectDO" }]
       },
