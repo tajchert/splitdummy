@@ -1,8 +1,8 @@
-# Splitdummy — Product and Development Handoff
+# Splitdummy — Product Specification
 
-Version: 1.0 · Prepared: 4 October 2026
+Version 1.0 · 4 October 2026
 
-Status: build specification for development-team review. This document defines the proposed first release; it does not imply that an application has been implemented or deployed.
+The product rules and first-release scope that the implementation follows. For how it is built, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 1. Purpose and product promise
 
@@ -16,7 +16,7 @@ Product description:
 
 Success means a participant can understand their position, add a normal expense quickly, and follow repayment instructions without those instructions changing unexpectedly.
 
-### Requirements supplied by the founder
+### Core requirements
 
 - Product name: Splitdummy.
 - A simpler, easier-to-use alternative to Splitwise.
@@ -34,8 +34,6 @@ Success means a participant can understand their position, add a normal expense 
 - Multiple expense currencies convert into one project settlement currency.
 - Initial conversion uses explicit, saved manual rates or the payer’s known converted amount. An external exchange-rate feed is not a launch dependency.
 - Owner accounts are recoverable; participants can join as guests.
-
-The attached research informs the design. Its embedded suggestions are not additional founder instructions. Competitor claims in that research include references without source URLs; do not publish them as verified marketing claims.
 
 ## 2. Scope
 
@@ -373,5 +371,3 @@ Consult current documentation during implementation; beta access, limits, and pr
 - [Turnstile server validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/)
 - [R2](https://developers.cloudflare.com/r2/)
 - [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/)
-
-Source inputs supplied by the founder: `cloudflare-backend-products.md` and `expense-sharing-research.md`. This handoff supersedes the earlier single-currency-only first-release proposal: opt-in multi-currency is now required for launch.

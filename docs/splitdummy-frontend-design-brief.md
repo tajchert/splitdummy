@@ -1,6 +1,6 @@
 # Splitdummy — Frontend Design Brief
 
-For: UI/UX and product team · 4 October 2026
+The UI/UX brief the design was made from · 4 October 2026
 
 ## Product and core journey
 
@@ -66,10 +66,8 @@ Design empty groups, no expenses, no amount owed, waiting for members, everyone 
 
 Use accessible contrast, labels, keyboard navigation, and status text alongside colour. Confirm destructive deletion and irreversible freeze. Provide responsive desktop layouts as well as mobile views.
 
-## Team deliverables and boundaries
-
-Provide a page map, owner and participant journeys, mobile-first wireframes, responsive final designs, reusable components, and annotated state/permission variants. Prototype the single-currency journey, a foreign expense, freeze with someone not ready, receipt dispute, and a later correction round.
+## Out of scope for the first release
 
 First release excludes receipt uploads/OCR, AI entry, live market exchange rates, percentage/itemized splits, multiple payers per expense, bank integrations, in-app money transfers, recurring automation, and cross-group debt simplification.
 
-Detailed behavior and edge cases: [Development handoff](splitdummy-development-handoff.md). This brief condenses that specification; it does not change its product rules.
+Detailed behavior and edge cases: [Product specification](splitdummy-development-handoff.md). This brief condenses that specification; it does not change its product rules.

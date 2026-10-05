@@ -1,8 +1,8 @@
-# Splitdummy — Architecture & Workstreams
+# Splitdummy — Architecture
 
-Product spec: [`splitdummy-development-handoff.md`](splitdummy-development-handoff.md) (authoritative).
+Product spec: [`splitdummy-development-handoff.md`](splitdummy-development-handoff.md) (source of truth for product rules).
 Frontend brief: [`splitdummy-frontend-design-brief.md`](splitdummy-frontend-design-brief.md).
-Visual design: [`../design/SplitDummy.dc.html`](../design/SplitDummy.dc.html) (Claude Design canvas export; option **1a "Paper ledger"** is the base).
+Visual design: [`../design/SplitDummy.dc.html`](../design/SplitDummy.dc.html) (original design exploration; option **1a "Paper ledger"** is the base).
 
 ## Runtime layout (single Worker, `splitdummy`)
 
@@ -19,7 +19,7 @@ EMAIL (send_email) — magic links + notifications
 ```
 
 Environments: `production` → `splitdummy.app`, `staging` → `staging.splitdummy.app` (`wrangler deploy --env staging`).
-Account `7e814786800e88ac74b5acc9033370d4`. Resources are already created (see `wrangler.jsonc`).
+Resource IDs for the hosted instance live in `wrangler.jsonc`; the README explains how to deploy your own.
 
 ## Public API
 
@@ -29,7 +29,7 @@ Bearer authentication and scope checks run before the origin guard. Only validat
 Key creation is intentionally not automatically retried because the secret cannot be replayed. Group mutations retain existing idempotency and version checks.
 Public user docs: `/docs/api`; machine-readable guide: `/api/docs`; OpenAPI 3.1 schema: `/api/openapi.json` (request schemas generated from the existing Zod contracts).
 
-## Contracts (change only with coordinator approval)
+## Contracts
 
 | File | What |
 |---|---|
@@ -37,18 +37,7 @@ Public user docs: `/docs/api`; machine-readable guide: `/api/docs`; OpenAPI 3.1 
 | `src/shared/money.ts` + `src/shared/money/*` | Accounting core signatures (BigInt, exact rationals) |
 | `worker/do/types.ts` | Edge ↔ DO RPC (`DoRequest`/`DoResponse`/`Principal`), invite token format, outbox messages |
 
-If a contract is insufficient, extend it additively (new optional fields / new ops) and mention it in your final report.
-
-## Workstreams & file ownership
-
-| Workstream | Owns |
-|---|---|
-| **core** | `src/shared/money/**` (+ `*.test.ts`) |
-| **authority** | `worker/do/**` (except `types.ts`), `test/do/**` |
-| **edge** | `worker/index.ts`, `worker/routes/**`, `worker/auth/**`, `worker/queue/**`, `worker/lib/**`, `migrations/**`, `wrangler.jsonc`, `test/edge/**` |
-| **web** | `index.html`, `src/web/**`, `public/**` |
-
-`package.json`: add dependencies with `npm i -E`; keep script names stable. The coordinator resolves merge conflicts.
+The web app, Worker and Durable Objects all depend on these. Extend them additively (new optional fields, new ops) rather than changing existing shapes.
 
 ## Conventions
 
@@ -57,6 +46,8 @@ If a contract is insufficient, extend it additively (new optional fields / new o
 - IDs: `crypto.randomUUID()`-based with short prefixes (`p_`, `m_`, `r_`, `e_`, `i_`, `inv_`), opaque.
 - Errors: `ApiErrorBody` with codes from `api.ts`; field paths for form errors.
 - Tests: `npm run test:shared` (node), `npm run test:worker` (workerd via vitest-pool-workers), `npm run test:web` (jsdom).
+- Dependencies: exact versions (`npm i -E`).
+- `worker/worker-configuration.d.ts` is generated from `wrangler.jsonc` by `npm run cf-typegen` (runs on install and deploy); it is not committed.
 - Commits: small, conventional (`feat(core): …`, `fix(do): …`, `test(edge): …`).
 
 ## Deploying
@@ -67,5 +58,5 @@ scripts/deploy.sh production               # → https://splitdummy.app
 scripts/deploy.sh <env> --init-secrets     # first deploy of an env: uploads TURNSTILE_SECRET from the widget via `cf`
 ```
 
-The script typechecks, builds with Vite (`CLOUDFLARE_ENV` selects the env), applies D1 migrations remotely, then deploys.
+The script regenerates Worker types, typechecks, builds with Vite (`CLOUDFLARE_ENV` selects the env), applies D1 migrations remotely, then deploys.
 Local dev: `cp .dev.vars.example .dev.vars && npm run dev` (Turnstile test keys, devLink sign-in). UI-only: `VITE_MOCK=1 npm run dev`.
