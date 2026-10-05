@@ -233,6 +233,14 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
         return anonymizeMember(tx);
       case "principalUpdated":
         return principalUpdated(tx, req);
+      case "addMember":
+      case "renameMember":
+      case "inviteMember":
+      case "cancelMemberInvite":
+      case "previewMemberInvite":
+      case "acceptMemberInvite":
+        // Implemented in the backend batch.
+        throw invalid(undefined, `Operation ${op} is not implemented yet`);
       default: {
         const unknownOp: never = op;
         throw invalid(undefined, `Unknown operation ${String(unknownOp)}`);

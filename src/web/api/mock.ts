@@ -75,7 +75,7 @@ interface State {
   projects: Record<string, MockProject>;
 }
 
-const STORAGE = "splitdummy-mock-v2";
+const STORAGE = "splitdummy-mock-v3";
 const now = () => new Date().toISOString();
 const uid = (p: string) => `${p}${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
 const exp = (code: string) => getCurrency(code)?.exponent ?? 2;
@@ -377,7 +377,7 @@ function seed(kind: Seed = "collecting"): State {
       joinedAt: joined ?? new Date(new Date(created).getTime() + i * 3600_000).toISOString(),
       status: "ACTIVE",
       referenced: false,
-      accountDeleted: false,
+      accountDeleted: false, kind: "PERSON", inviteState: null, inviteExpiresAt: null,
     }));
     const p: MockProject = {
       project: {
@@ -387,6 +387,7 @@ function seed(kind: Seed = "collecting"): State {
         baseCurrency,
         baseExponent: exp(baseCurrency),
         multiCurrencyEnabled: multi,
+        membersCanRename: true,
         baseCurrencyLocked: false,
         activeRoundId: null,
         version: 1,
@@ -449,7 +450,7 @@ function seed(kind: Seed = "collecting"): State {
   );
   lis.rates.push({ currency: "GBP", rate: "1.17", setByMemberId: "m_maya", setAt: "2026-09-03T10:12:00.000Z", revision: 1 });
   // Round 1 (flights and deposit) was settled in August; Sam took part and later deleted their account.
-  lis.members.push({ id: "m_sam", displayName: "Deleted account", isOwner: false, isGuest: false, hasRecoverableAccount: false, joinedAt: "2026-08-01T15:00:00.000Z", status: "LEFT", referenced: true, accountDeleted: true });
+  lis.members.push({ id: "m_sam", displayName: "Deleted account", isOwner: false, isGuest: false, hasRecoverableAccount: false, joinedAt: "2026-08-01T15:00:00.000Z", status: "LEFT", referenced: true, accountDeleted: true, kind: "PERSON", inviteState: null, inviteExpiresAt: null });
   lis.principals.m_sam = "pr_sam_deleted";
   const l1 = newRound(lis, 1, "2026-08-01T09:00:00.000Z");
   const withSam = [...all(lis), { memberId: "m_sam" }];
@@ -900,8 +901,8 @@ export function createMockApi(): MockApi {
         const mid = uid("m_");
         const t = now();
         const p: MockProject = {
-          project: { id, name: d.name, ownerMemberId: mid, baseCurrency: d.baseCurrency, baseExponent: exp(d.baseCurrency), multiCurrencyEnabled: d.multiCurrencyEnabled, baseCurrencyLocked: false, activeRoundId: null, version: 1, createdAt: t },
-          members: [{ id: mid, displayName: d.ownerDisplayName, isOwner: true, isGuest: false, hasRecoverableAccount: true, joinedAt: t, status: "ACTIVE", referenced: false, accountDeleted: false }],
+          project: { id, name: d.name, ownerMemberId: mid, baseCurrency: d.baseCurrency, baseExponent: exp(d.baseCurrency), multiCurrencyEnabled: d.multiCurrencyEnabled, membersCanRename: true, baseCurrencyLocked: false, activeRoundId: null, version: 1, createdAt: t },
+          members: [{ id: mid, displayName: d.ownerDisplayName, isOwner: true, isGuest: false, hasRecoverableAccount: true, joinedAt: t, status: "ACTIVE", referenced: false, accountDeleted: false, kind: "PERSON", inviteState: null, inviteExpiresAt: null }],
           principals: { [mid]: pr.id },
           rates: [],
           rounds: [],
@@ -1016,7 +1017,7 @@ export function createMockApi(): MockApi {
         const existing = p.members.find((m) => p.principals[m.id] === pr.id && m.status === "ACTIVE");
         if (existing) return { projectId };
         const mid = uid("m_");
-        p.members.push({ id: mid, displayName: d.data!.displayName, isOwner: false, isGuest: pr.kind === "GUEST", hasRecoverableAccount: pr.kind === "ACCOUNT" || !!pr.email, joinedAt: now(), status: "ACTIVE", referenced: false, accountDeleted: false });
+        p.members.push({ id: mid, displayName: d.data!.displayName, isOwner: false, isGuest: pr.kind === "GUEST", hasRecoverableAccount: pr.kind === "ACCOUNT" || !!pr.email, joinedAt: now(), status: "ACTIVE", referenced: false, accountDeleted: false, kind: "PERSON", inviteState: null, inviteExpiresAt: null });
         p.principals[mid] = pr.id;
         if (r.round.status === "COLLECTING") {
           clearReady(r, "all");

@@ -44,6 +44,13 @@ describe("project routing", () => {
       "previewInvite",
       "join",
       "live",
+      // Member invites: routed in the backend batch (remove from this list once PROJECT_ROUTES/edge handlers exist).
+      "addMember",
+      "renameMember",
+      "inviteMember",
+      "cancelMemberInvite",
+      "previewMemberInvite",
+      "acceptMemberInvite",
     ];
     const mapped = Object.keys(PROJECT_ROUTES);
     expect([...edgeHandled, ...mapped].sort()).toEqual(Object.keys(ENDPOINTS).sort());

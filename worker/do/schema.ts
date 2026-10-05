@@ -210,6 +210,15 @@ const MIGRATIONS: string[] = [
   ALTER TABLE rounds ADD COLUMN scheduled_freeze_at TEXT;
   ALTER TABLE rounds ADD COLUMN frozen_by_schedule INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  ALTER TABLE members ADD COLUMN kind TEXT NOT NULL DEFAULT 'PERSON';
+  ALTER TABLE members ADD COLUMN invited_email TEXT;
+  ALTER TABLE members ADD COLUMN invite_secret_hash TEXT;
+  ALTER TABLE members ADD COLUMN invite_sent_at TEXT;
+  ALTER TABLE members ADD COLUMN invite_expires_at TEXT;
+  CREATE UNIQUE INDEX members_invite_secret ON members(invite_secret_hash) WHERE invite_secret_hash IS NOT NULL;
+  ALTER TABLE project ADD COLUMN members_can_rename INTEGER NOT NULL DEFAULT 1;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

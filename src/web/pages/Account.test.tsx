@@ -23,9 +23,9 @@ function renderAt(api: MockApi, path: string) {
 /** Seed the demo, then act as `principal` (Lea owns only Porto and has no open transfers). */
 function mockAs(principal: string): MockApi {
   createMockApi();
-  const s = JSON.parse(localStorage.getItem("splitdummy-mock-v2")!);
+  const s = JSON.parse(localStorage.getItem("splitdummy-mock-v3")!);
   s.me = principal;
-  localStorage.setItem("splitdummy-mock-v2", JSON.stringify(s));
+  localStorage.setItem("splitdummy-mock-v3", JSON.stringify(s));
   return createMockApi();
 }
 

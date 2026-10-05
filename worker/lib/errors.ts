@@ -23,6 +23,8 @@ const DEFAULT_STATUS: Record<ApiErrorCode, number> = {
   LIMIT_EXCEEDED: 422,
   INTERNAL: 500,
   SIGNIN_LINK_INVALID: 410,
+  EMAIL_REQUIRED: 401,
+  ALREADY_MEMBER: 409,
 };
 
 /** Thrown anywhere in the edge; rendered by the app's onError as ApiErrorBody. */

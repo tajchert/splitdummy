@@ -11,9 +11,10 @@ const money = z.string().describe('Integer minor units, e.g. "1250" = 12.50 for 
 const nullableText = z.string().nullable();
 const object = <T extends z.ZodRawShape>(shape: T) => z.object(shape).passthrough();
 const member = object({ id, displayName: z.string(), isOwner: z.boolean(), isGuest: z.boolean(),
-  hasRecoverableAccount: z.boolean(), joinedAt: z.string(), status: z.enum(["ACTIVE", "LEFT", "REMOVED"]), referenced: z.boolean(), accountDeleted: z.boolean() });
+  hasRecoverableAccount: z.boolean(), joinedAt: z.string(), status: z.enum(["ACTIVE", "LEFT", "REMOVED"]), referenced: z.boolean(), accountDeleted: z.boolean(),
+  kind: z.enum(["PERSON", "PLACEHOLDER"]), inviteState: z.enum(["INVITED", "INVITE_EXPIRED"]).nullable(), inviteExpiresAt: nullableText, invitedEmail: nullableText.optional() });
 const project = object({ id, name: z.string(), ownerMemberId: id, baseCurrency: z.string(), baseExponent: z.number(),
-  multiCurrencyEnabled: z.boolean(), baseCurrencyLocked: z.boolean(), activeRoundId: id.nullable(), version: z.number(), createdAt: z.string() });
+  multiCurrencyEnabled: z.boolean(), membersCanRename: z.boolean(), baseCurrencyLocked: z.boolean(), activeRoundId: id.nullable(), version: z.number(), createdAt: z.string() });
 const round = object({ id, sequence: z.number(), status: z.enum(["COLLECTING", "SETTLING", "SETTLED"]),
   ledgerVersion: z.number(), reviewVersion: z.number(), createdAt: z.string(), frozenAt: nullableText, settledAt: nullableText,
   earlyFreezeReason: nullableText, frozenByMemberId: nullableText, scheduledFreezeDate: nullableText,
@@ -64,6 +65,10 @@ const operations: Partial<Record<keyof typeof api.ENDPOINTS, Operation>> = {
   deleteRate: { summary: "Remove a currency exchange rate", description: "Owner only.", response: ok },
   createInvite: { summary: "Create an invitation", description: "Owner only. Invitation URL is returned once.", response: invitation, created: true },
   revokeInvite: { summary: "Revoke an invitation", description: "Owner only.", response: invitation },
+  addMember: { summary: "Add a person by name", description: "Owner only. With an email, sends a 7-day invitation that lets them claim this spot.", body: api.AddMemberSchema, response: member.extend({ emailSent: z.boolean().nullable() }), created: true },
+  renameMember: { summary: "Rename a member", description: "Owner only.", body: api.RenameMemberSchema, response: member },
+  inviteMember: { summary: "Email an invitation to a placeholder", description: "Owner only. Replaces any earlier link.", body: api.InviteMemberSchema, response: member.extend({ emailSent: z.boolean().nullable() }) },
+  cancelMemberInvite: { summary: "Cancel a placeholder's email invitation", description: "Owner only.", response: member },
   removeMember: { summary: "Remove a group member", description: "Owner only. Referenced members cannot be removed.", response: member },
   leave: { summary: "Leave a group", response: member },
   renameMe: { summary: "Change your name in a group", body: api.RenameMemberSchema, response: member },

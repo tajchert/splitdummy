@@ -8,11 +8,16 @@ export interface ProjectRow {
   base_currency: string;
   base_exponent: number;
   multi_currency_enabled: number;
+  members_can_rename: number;
   base_currency_locked: number;
   active_round_id: string | null;
   version: number;
   created_at: string;
 }
+
+/** Synthetic principal for members without an account (placeholders, retired identities). Never a real login. */
+export const PLACEHOLDER_PREFIX = "ph:";
+export const isPlaceholderPrincipal = (principalId: string) => principalId.startsWith(PLACEHOLDER_PREFIX);
 
 export type MemberStatus = "ACTIVE" | "LEFT" | "REMOVED";
 
@@ -26,6 +31,11 @@ export interface MemberRow {
   status: MemberStatus;
   status_changed_at: string | null;
   account_deleted: number;
+  kind: "PERSON" | "PLACEHOLDER";
+  invited_email: string | null;
+  invite_secret_hash: string | null;
+  invite_sent_at: string | null;
+  invite_expires_at: string | null;
 }
 
 export interface RoundRow {
