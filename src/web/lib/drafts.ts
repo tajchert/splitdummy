@@ -1,4 +1,4 @@
-import type { EntryDraft } from "./entryForm";
+import { withDraftDefaults, type EntryDraft } from "./entryForm";
 
 /** Local, unsent entry drafts. Never shown as saved; the UI labels them "Not saved". */
 const key = (projectId: string, slot: string) => `splitdummy-draft:${projectId}:${slot}`;
@@ -6,7 +6,7 @@ const key = (projectId: string, slot: string) => `splitdummy-draft:${projectId}:
 export function loadDraft(projectId: string, slot: string): EntryDraft | null {
   try {
     const raw = localStorage.getItem(key(projectId, slot));
-    return raw ? (JSON.parse(raw) as EntryDraft) : null;
+    return raw ? withDraftDefaults(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
@@ -36,7 +36,7 @@ export function findRejectedDraft(projectId: string): { slot: string; draft: Ent
       const k = localStorage.key(i);
       if (!k?.startsWith(prefix)) continue;
       const d = JSON.parse(localStorage.getItem(k) ?? "null") as EntryDraft | null;
-      if (d?.rejected) return { slot: k.slice(prefix.length), draft: d };
+      if (d?.rejected) return { slot: k.slice(prefix.length), draft: withDraftDefaults(d) };
     }
   } catch {
     /* ignore */

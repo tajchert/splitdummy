@@ -1,5 +1,5 @@
 import type { EntryDTO, EntryInput, ProjectViewDTO, RateDefaultDTO } from "@shared/api";
-import { DescriptionSchema } from "@shared/api";
+import { DescriptionSchema, NoteSchema } from "@shared/api";
 import {
   computeEntry,
   parseAmount,
@@ -30,6 +30,10 @@ export interface EntryDraft {
   baseAmount: string;
   /** False while the rate field still shows the owner's saved default. */
   rateEdited: boolean;
+  /** Free text; "" when none. */
+  note: string;
+  /** Uploaded photo ids in display order. */
+  attachmentIds: string[];
   /** Local-only bookkeeping, never sent. */
   savedAt?: string;
   rejected?: boolean;
@@ -81,6 +85,8 @@ export function emptyDraft(type: EntryDraft["type"], view: ProjectViewDTO, today
     rate: "",
     baseAmount: "",
     rateEdited: false,
+    note: "",
+    attachmentIds: [],
   };
 }
 
@@ -102,7 +108,14 @@ export function draftFromEntry(e: EntryDTO, sep: "." | ","): EntryDraft {
     rate: foreign && e.conversion.method === "MANUAL_RATE" ? (sep === "," ? e.conversion.rate.replace(".", ",") : e.conversion.rate) : "",
     baseAmount: foreign && e.conversion.method === "ACTUAL_BASE_AMOUNT" ? minorToInput(e.baseAmount, e.baseExponent) : "",
     rateEdited: true,
+    note: e.note ?? "",
+    attachmentIds: e.attachments.map((a) => a.id),
   };
+}
+
+/** Drafts stored before notes/photos existed lack those fields. */
+export function withDraftDefaults(d: Omit<EntryDraft, "note" | "attachmentIds"> & Partial<Pick<EntryDraft, "note" | "attachmentIds">>): EntryDraft {
+  return { ...d, note: d.note ?? "", attachmentIds: d.attachmentIds ?? [] };
 }
 
 export function amountErrorText(err: AmountParseError, code: string, exponent: number, sep: string): string {
@@ -173,6 +186,8 @@ export function evaluateEntry(d: EntryDraft, ctx: FormContext): EntryEvaluation 
 
   const desc = DescriptionSchema.safeParse(d.description);
   if (!desc.success) errors.description = desc.error.issues[0]?.message ?? "Enter a description";
+  const note = NoteSchema.safeParse(d.note);
+  if (!note.success) errors.note = note.error.issues[0]?.message ?? "This note is too long";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) errors.occurredAt = "Pick a date";
   if (!d.payer) errors.payerMemberId = d.type === "REFUND" ? "Pick who received the money" : "Pick who paid";
 
@@ -288,6 +303,8 @@ export function evaluateEntry(d: EntryDraft, ctx: FormContext): EntryEvaluation 
         payerMemberId: d.payer,
         splitMode: d.splitMode,
         participants: people.map((m) => (d.splitMode === "EXACT" ? { memberId: m, amount: (shares![m] ?? 0n).toString() } : { memberId: m })),
+        note: note.success && note.data ? note.data : null,
+        attachmentIds: d.attachmentIds,
       }
     : null;
 
@@ -296,6 +313,7 @@ export function evaluateEntry(d: EntryDraft, ctx: FormContext): EntryEvaluation 
 
 /** Map a server field path onto the form's field keys. */
 export function formFieldFor(serverField: string, participants: string[]): string {
+  if (serverField.startsWith("attachmentIds")) return "photos";
   const m = serverField.match(/^participants\.(\d+)\.amount$/);
   if (m) return `exact.${participants[Number(m[1])] ?? ""}`;
   if (serverField.startsWith("conversion.rate")) return "rate";

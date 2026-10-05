@@ -1284,6 +1284,84 @@
 .ef-advanced-body {
   padding-top: 14px;
 }
+.ef-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ef-note {
+  field-sizing: content;
+  min-height: calc(2lh + 20px);
+  max-height: calc(10lh + 20px);
+  resize: vertical;
+}
+.ef-photos {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.photo-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.photo-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--line);
+}
+.photo-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.photo-tile.is-compressing img,
+.photo-tile.is-uploading img,
+.photo-tile.is-failed img {
+  opacity: 0.45;
+}
+.photo-tile-status,
+.photo-tile-error {
+  position: absolute;
+  inset: auto 4px 4px 4px;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+}
+.photo-tile-error {
+  color: var(--red);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+/* Keep long messages inside the tile so Retry stays reachable; the full text is in the title. */
+.photo-tile-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.25;
+}
+.photo-tile-note {
+  color: var(--ink2);
+}
+.photo-tile-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--surface);
+  border-radius: 999px;
+}
 .fx {
   background: var(--blue-soft);
   border-radius: var(--r-lg);
