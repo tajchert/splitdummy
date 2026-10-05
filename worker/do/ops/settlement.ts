@@ -214,10 +214,16 @@ function transition(tx: Tx, req: DoRequest, action: Action): OpResult {
   const me = tx.member();
   const { round, instruction } = instructionFor(tx, req);
   const body = parseBody(InstructionActionSchema, req.body);
-  const isSender = instruction.from_member_id === me.id;
-  const isRecipient = instruction.to_member_id === me.id;
+  // The owner stands in for placeholders: people in the ledger who have no account yet.
+  const isOwner = tx.project.owner_member_id === me.id;
+  const actsFor = (memberId: string) => memberId === me.id || (isOwner && tx.store.member(memberId)?.kind === "PLACEHOLDER");
+  const isSender = actsFor(instruction.from_member_id);
+  const isRecipient = actsFor(instruction.to_member_id);
   if (action === "SENT" && !isSender) throw forbidden("Only the sender can mark this transfer as sent.");
   if (action !== "SENT" && !isRecipient) throw forbidden("Only the recipient can confirm or dispute this transfer.");
+  const party = action === "SENT" ? instruction.from_member_id : instruction.to_member_id;
+  const onBehalf = party !== me.id ? { onBehalfOfMemberId: party } : null;
+  const by = onBehalf ? ` (marked by ${me.display_name})` : "";
 
   // Retries and double clicks of an action that already took effect are no-ops.
   const already =
@@ -256,7 +262,7 @@ function transition(tx: Tx, req: DoRequest, action: Action): OpResult {
       revision,
       instruction.id,
     );
-    tx.audit("INSTRUCTION_SENT", `${from} sent ${amount} to ${to}`, auditOpts);
+    tx.audit("INSTRUCTION_SENT", `${from} sent ${amount} to ${to}${by}`, { ...auditOpts, ...(onBehalf ? { details: onBehalf } : {}) });
     tx.notify("TRANSFER_SENT", [instruction.to_member_id], `${from} says they sent you ${amount} in “${project.name}”.`);
   } else if (action === "DISPUTED") {
     const note = body.note?.trim() || null;
@@ -267,7 +273,7 @@ function transition(tx: Tx, req: DoRequest, action: Action): OpResult {
       revision,
       instruction.id,
     );
-    tx.audit("INSTRUCTION_DISPUTED", `${to} has not received ${amount} from ${from}`, { ...auditOpts, details: { note } });
+    tx.audit("INSTRUCTION_DISPUTED", `${to} has not received ${amount} from ${from}${by}`, { ...auditOpts, details: { note, ...onBehalf } });
     tx.notify("TRANSFER_DISPUTED", [instruction.from_member_id], `${to} hasn't received ${amount} in “${project.name}”.`);
   } else {
     tx.store.run(
@@ -291,7 +297,7 @@ function transition(tx: Tx, req: DoRequest, action: Action): OpResult {
       tx.now,
       me.id,
     );
-    tx.audit("INSTRUCTION_CONFIRMED", `${to} received ${amount} from ${from}`, auditOpts);
+    tx.audit("INSTRUCTION_CONFIRMED", `${to} received ${amount} from ${from}${by}`, { ...auditOpts, ...(onBehalf ? { details: onBehalf } : {}) });
     tx.notify("TRANSFER_CONFIRMED", [instruction.from_member_id], `${to} confirmed receiving ${amount} in “${project.name}”.`);
 
     const open = tx.store.count(

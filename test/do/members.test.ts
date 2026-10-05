@@ -208,3 +208,54 @@ describe("email invites", () => {
     expect((await zoe.ok<JoinResultDTO>("acceptMemberInvite", { tokenSecret: token }, {})).memberId).toBe(member.id);
   });
 });
+
+describe("placeholders outside the ledger", () => {
+  it("never reach the directory projection or notifications", async () => {
+    const g = await createGroup({ members: 0 });
+    const zoe = await g.owner.ok<MemberDTO>("addMember", {}, { displayName: "Zoe" });
+    await g.owner.ok("createEntry", { roundId: g.roundId }, expense(zoe.id, [zoe.id, g.owner.memberId], "1000"));
+    await freezeNow(g);
+    const outbox = await runInDurableObject(g.stub, (_i, state) =>
+      state.storage.sql.exec("SELECT message_json FROM outbox").toArray().map((r) => String(r.message_json)),
+    );
+    expect(outbox.join("")).not.toContain("ph:");
+  });
+
+  it("owner marks sent/received on a placeholder's behalf; not after it is claimed", async () => {
+    const g = await createGroup({ members: 1 });
+    const bob = g.members[0]!;
+    const res = await g.owner.call("addMember", {}, { displayName: "Zoe", email: "z@example.com" });
+    const zoe = res.body as MemberDTO;
+    const token = res.transient!.inviteMail!.url.split("#")[1]!;
+    // Zoe paid 900 for three: Bob and Alice each owe her 300.
+    await g.owner.ok("createEntry", { roundId: g.roundId }, expense(zoe.id, [zoe.id, g.owner.memberId, bob.memberId], "900"));
+    const frozen = await freezeNow(g);
+    const toZoe = frozen.instructions.filter((i: { toMemberId: string }) => i.toMemberId === zoe.id);
+    const fromBob = toZoe.find((i: { fromMemberId: string }) => i.fromMemberId === bob.memberId)!;
+    await bob.ok("markSent", { roundId: g.roundId, instructionId: fromBob.id }, {});
+    expect((await errorCode(bob.call("markReceived", { roundId: g.roundId, instructionId: fromBob.id }, {}))).status).toBe(403);
+    await g.owner.ok("markReceived", { roundId: g.roundId, instructionId: fromBob.id }, {});
+    const history = await g.owner.ok("getHistory", {}, null, null);
+    expect(history.events[0]).toMatchObject({ action: "INSTRUCTION_CONFIRMED", details: { onBehalfOfMemberId: zoe.id } });
+
+    // Once claimed, only Zoe acts for herself.
+    const zoeClient = new Client(g.stub, g.projectId, { ...makePrincipal(), email: "z@example.com" });
+    await zoeClient.ok("acceptMemberInvite", { tokenSecret: token }, {});
+    const fromAlice = toZoe.find((i: { fromMemberId: string }) => i.fromMemberId === g.owner.memberId)!;
+    await g.owner.ok("markSent", { roundId: g.roundId, instructionId: fromAlice.id }, {});
+    expect((await errorCode(g.owner.call("markReceived", { roundId: g.roundId, instructionId: fromAlice.id }, {}))).status).toBe(403);
+    await zoeClient.ok("markReceived", { roundId: g.roundId, instructionId: fromAlice.id }, {});
+  });
+
+  it("a link join with the invited email claims the placeholder instead of duplicating", async () => {
+    const g = await createGroup({ members: 0 });
+    const zoe = await g.owner.ok<MemberDTO>("addMember", {}, { displayName: "Zoe", email: "z@example.com" });
+    const linkToken = (await g.owner.ok<{ url: string }>("createInvite")).url.split("#")[1]!;
+    const joiner = new Client(g.stub, g.projectId, { ...makePrincipal(), email: "z@example.com" });
+    const res = await joiner.ok<JoinResultDTO>("join", { tokenSecret: linkToken }, { displayName: "Zoe B" });
+    expect(res.memberId).toBe(zoe.id);
+    const view = await g.owner.view();
+    expect(view.members.filter((m) => m.status === "ACTIVE")).toHaveLength(2);
+    expect(view.members.find((m) => m.id === zoe.id)).toMatchObject({ kind: "PERSON", displayName: "Zoe B" });
+  });
+});

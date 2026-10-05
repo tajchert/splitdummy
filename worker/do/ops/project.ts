@@ -14,6 +14,7 @@ import { getCurrency, parseRate, rateToString } from "@shared/money";
 import { z } from "zod";
 import { ApiError, conflict, forbidden, invalid, limitExceeded, notFound, parseBody } from "../errors";
 import { INVITE_TTL_MS, LIMITS } from "../limits";
+import { claimPlaceholder, findInvitedPlaceholder } from "./members";
 import type { InvitationRow, MemberRow } from "../store";
 import { newId, type Tx } from "../tx";
 import type { DoRequest, DoResponse, Principal } from "../types";
@@ -327,6 +328,14 @@ export function join(tx: Tx, req: DoRequest, prepared: { secretHash: string }): 
   const body = parseBody(JoinBody, req.body);
   const activeCount = tx.store.count("SELECT COUNT(*) AS n FROM members WHERE status != 'REMOVED'");
   if (activeCount >= LIMITS.members) throw limitExceeded(`A group can have at most ${LIMITS.members} members.`);
+
+  // An invited person joining by link with the invited email takes over their placeholder.
+  const invited = principal.email && (!existing || existing.status === "REMOVED") ? findInvitedPlaceholder(tx, principal.email) : undefined;
+  if (invited) {
+    const claimed = claimPlaceholder(tx, invited, principal, body.displayName);
+    const result: JoinResultDTO = { projectId: project.id, memberId: claimed.id };
+    return ok(result);
+  }
 
   let member: MemberRow;
   if (existing) {
