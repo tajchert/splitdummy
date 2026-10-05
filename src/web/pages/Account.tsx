@@ -13,6 +13,7 @@ import { Banner, Icon, Loading } from "../components/ui";
 import { plural } from "../lib/format";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { useEmailLinkForm } from "./SignIn";
+import { InstallApp } from "../components/InstallApp";
 import { ApiKeys } from "./ApiKeys";
 
 export function Account() {
@@ -92,6 +93,8 @@ function AccountInner() {
             ))}
           </div>
         </section>
+
+        <InstallApp />
 
         {signOutError && (
           <Banner tone="red" icon="error" role="alert">

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createHttpApi } from "./api/http";
 import type { Api } from "./api/types";
 import { App } from "./App";
+import { listenForInstall } from "./lib/install";
 import { applyStoredTheme } from "./lib/theme";
 import { reloadForNewBuild } from "./lib/lazyPage";
 import "./styles/tokens.css";
@@ -11,6 +12,7 @@ import "./styles/components.css";
 import "./styles/pages.css";
 
 applyStoredTheme();
+listenForInstall();
 
 // A stale tab after a deploy: Vite couldn't preload a chunk's dependencies. Reload once for the new build.
 window.addEventListener("vite:preloadError", (e) => {

@@ -2164,3 +2164,8 @@
   background: var(--amber-soft);
   color: var(--ink);
 }
+
+/* A quiet, optional home-screen shortcut in account settings. */
+.install-app { background: transparent; }
+.install-app summary { cursor: pointer; }
+.install-app-help { margin-top: 8px; }
