@@ -44,11 +44,9 @@ describe("project routing", () => {
       "previewInvite",
       "join",
       "live",
-      // Member invites: routed in the backend batch (remove from this list once PROJECT_ROUTES/edge handlers exist).
+      // Member invites: custom edge handlers in routes/members.ts (renameMember/cancelMemberInvite are DO-mapped).
       "addMember",
-      "renameMember",
       "inviteMember",
-      "cancelMemberInvite",
       "previewMemberInvite",
       "acceptMemberInvite",
     ];
@@ -89,6 +87,8 @@ describe("project routing", () => {
     ["DELETE", `/api/projects/${P}/members/m_2`, "removeMember", { memberId: "m_2" }],
     ["POST", `/api/projects/${P}/leave`, "leave", {}],
     ["PATCH", `/api/projects/${P}/members/me`, "renameMe", {}],
+    ["PATCH", `/api/projects/${P}/members/m_2/name`, "renameMember", { memberId: "m_2" }],
+    ["DELETE", `/api/projects/${P}/members/m_2/invite`, "cancelMemberInvite", { memberId: "m_2" }],
     ["POST", `/api/projects/${P}/ownership`, "transferOwnership", {}],
     ["POST", `/api/projects/${P}/ownership/accept`, "acceptOwnership", {}],
     ["POST", `/api/projects/${P}/rounds/r_1/entries`, "createEntry", { roundId: "r_1" }],
@@ -126,6 +126,7 @@ describe("project routing", () => {
       setReadiness: { ready: true },
       freeze: { expectedReviewVersion: 3 },
       renameMe: { displayName: "Ann P." },
+      renameMember: { displayName: "Zoe" },
       setFreezeSchedule: { date: "2026-12-24", timeZone: "Europe/Warsaw" },
     };
     const res = await call(path, { method, cookie, body: method === "GET" ? undefined : (bodies[op] ?? {}) });

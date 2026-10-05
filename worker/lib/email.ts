@@ -71,3 +71,15 @@ export function notificationEmail(opts: { summary: string; projectUrl: string })
     html: layout({ heading: opts.summary, paragraphs: [], action: { label: "Open the group", url: opts.projectUrl }, footer }),
   };
 }
+
+export function memberInviteEmail(opts: { inviterName: string; projectName: string; displayName: string; url: string; expiresAt: string }): EmailContent {
+  const subject = `${opts.inviterName} invited you to “${opts.projectName}” on Splitdummy`.slice(0, 160);
+  const intro = `${opts.inviterName} added you to “${opts.projectName}” as ${opts.displayName} to share expenses.`;
+  const footer = `This invitation works until ${opts.expiresAt.slice(0, 10)} (UTC). Joining confirms this email address. If you weren't expecting it, you can ignore this email.`;
+  const label = `Join ${opts.projectName}`.slice(0, 60);
+  return {
+    subject,
+    text: `${intro}\n\n${label}: ${opts.url}\n\n${footer}\n`,
+    html: layout({ heading: subject, paragraphs: [intro], action: { label, url: opts.url }, footer }),
+  };
+}
