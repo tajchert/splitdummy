@@ -21,7 +21,10 @@ export const requestAnalytics: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
   try {
     const method = c.req.method;
-    const route = routePath(c);
+    // A middleware answered (origin guard, bad API key): attribute it to the route it guarded.
+    // Only unmatched paths end with "/api/*" as their last matched route.
+    let route = routePath(c);
+    if (route === "/api/*") route = routePath(c, -1);
     const endpoint = ENDPOINT_NAMES.get(`${method} ${route}`) ?? (route === "/api/*" ? "unmatched" : `${method} ${route}`);
     const session = c.get("session");
     const client = session?.apiKey ? "apiKey" : session ? "session" : "none";

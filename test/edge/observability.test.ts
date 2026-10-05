@@ -47,6 +47,13 @@ describe("request analytics", () => {
     expect(writeDataPoint.mock.calls[1]![0].doubles[0]).toBe(404);
   });
 
+  it("attributes middleware rejections to the guarded endpoint", async () => {
+    const { env, writeDataPoint } = withAnalytics();
+    const res = await call("/api/client-errors", { body: {}, origin: "https://evil.example", env });
+    expect(res.status).toBe(403);
+    expect(writeDataPoint.mock.calls[0]![0].blobs.slice(0, 3)).toEqual(["reportClientError", "POST", "/api/client-errors"]);
+  });
+
   it("never fails the request when the dataset is unavailable", async () => {
     const env = { ...testEnv, ANALYTICS: undefined } as unknown as Env;
     vi.spyOn(console, "error").mockImplementation(() => {});
