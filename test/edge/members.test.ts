@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AddMemberResultDTO, JoinResultDTO, MeDTO, MemberInvitePreviewDTO, ProjectSummaryDTO, ProjectViewDTO } from "@shared/api";
-import { call, mockTurnstile, sessionCookie, signIn, uniqueEmail } from "./helpers";
+import { call, guestSession, mockProjectDO, mockTurnstile, projectView, sessionCookie, signIn, uniqueEmail } from "./helpers";
 
 beforeEach(() => {
   mockTurnstile();
@@ -82,5 +82,35 @@ describe("accepting an email invite", () => {
     const res = await call("/api/member-invites/accept", { body: { token: `p_${"a".repeat(32)}.${"S".repeat(43)}` } });
     expect(res.status).toBe(404);
     expect(sessionCookie(res)).toBeNull();
+  });
+});
+
+describe("joining by link", () => {
+  const P = `p_${"d".repeat(32)}`;
+  const token = `${P}.${"S".repeat(43)}`;
+
+  it("401 EMAIL_REQUIRED without a session or as an un-emailed guest; no guest is created", async () => {
+    const { calls } = mockProjectDO(() => ({ status: 200, body: { projectId: P } }));
+    const anon = await call("/api/invitations/join", { body: { token, displayName: "Bob" } });
+    expect(anon.status).toBe(401);
+    expect((await anon.json<{ error: { code: string } }>()).error.code).toBe("EMAIL_REQUIRED");
+    expect(sessionCookie(anon)).toBeNull();
+    const guest = await guestSession();
+    expect((await call("/api/invitations/join", { cookie: guest.cookie, body: { token, displayName: "Bob" } })).status).toBe(401);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("a verified account joins without Turnstile", async () => {
+    const cookie = await signIn(uniqueEmail("joiner"));
+    const { calls } = mockProjectDO((req) => (req.op === "join" ? { status: 200, body: { projectId: P, memberId: "m_1" } } : { status: 200, body: projectView(P, "m_1") }));
+    const res = await call("/api/invitations/join", { cookie, body: { token, displayName: "Bob", turnstileToken: "fail" } });
+    expect(res.status).toBe(200);
+    expect(calls[0]?.principal).toMatchObject({ kind: "ACCOUNT", hasRecoverableAccount: true });
+  });
+
+  it("accepts a 500-char sign-in next path (the join page carries the name)", async () => {
+    const next = `/join/${token}?name=${"x".repeat(300)}&auto=1`;
+    const res = await call("/api/auth/email", { body: { email: uniqueEmail("n"), turnstileToken: "ok", next } });
+    expect(res.status).toBe(200);
   });
 });

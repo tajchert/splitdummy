@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectSummaryDTO } from "@shared/api";
-import { call, mockProjectDO, mockTurnstile, projectView, sessionCookie, signIn, testEnv, uniqueEmail } from "./helpers";
+import { call, guestSession, mockProjectDO, mockTurnstile, projectView, sessionCookie, signIn, testEnv, uniqueEmail } from "./helpers";
 
 beforeEach(() => {
   mockTurnstile();
@@ -12,15 +12,7 @@ afterEach(() => {
 const createBody = { name: "Trip", baseCurrency: "PLN", ownerDisplayName: "Ann", turnstileToken: "ok" };
 
 async function guestCookie(): Promise<string> {
-  mockProjectDO((req) => (req.op === "join" ? { status: 200, body: { projectId: req.params.projectId } } : { status: 500, body: null }));
-  const res = await call("/api/invitations/join", {
-    body: { token: `p_${"9".repeat(32)}.${"t".repeat(43)}`, displayName: "Gus", turnstileToken: "ok" },
-  });
-  vi.restoreAllMocks();
-  mockTurnstile();
-  const cookie = sessionCookie(res);
-  if (!cookie) throw new Error("no guest");
-  return cookie;
+  return (await guestSession()).cookie;
 }
 
 describe("POST /api/projects", () => {
@@ -134,30 +126,6 @@ describe("invitations", () => {
   const P = `p_${"c".repeat(32)}`;
   const token = `${P}.${"S".repeat(43)}`;
 
-  it("join without a session creates a GUEST principal + session and routes by token prefix", async () => {
-    const { calls } = mockProjectDO((req) =>
-      req.op === "join" ? { status: 200, body: { projectId: P } } : { status: 200, body: projectView(P, "m_guest", 4) },
-    );
-    const res = await call("/api/invitations/join", { body: { token, displayName: " Bob ", turnstileToken: "ok" }, idempotencyKey: "join-key-1" });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ projectId: P });
-    const cookie = sessionCookie(res);
-    expect(cookie).not.toBeNull();
-
-    const join = calls.find((c) => c.op === "join");
-    expect(join).toMatchObject({
-      params: { projectId: P, tokenSecret: token },
-      body: { displayName: "Bob" },
-      idempotencyKey: "join-key-1",
-      principal: { kind: "GUEST", email: null, hasRecoverableAccount: false },
-    });
-    const me = await (await call("/api/me", { cookie })).json<{ principalId: string; kind: string; displayName: string }>();
-    expect(me).toMatchObject({ principalId: join?.principal?.principalId, kind: "GUEST", displayName: "Bob" });
-
-    const list = await (await call("/api/projects", { cookie })).json<ProjectSummaryDTO[]>();
-    expect(list).toEqual([expect.objectContaining({ id: P, isOwner: true })]);
-  });
-
   it("join with a session reuses the principal and sets no new cookie", async () => {
     const cookie = await signIn(uniqueEmail("joiner"));
     const { principalId } = await (await call("/api/me", { cookie })).json<{ principalId: string }>();
@@ -166,16 +134,6 @@ describe("invitations", () => {
     expect(res.status).toBe(200);
     expect(sessionCookie(res)).toBeNull();
     expect(calls[0]?.principal?.principalId).toBe(principalId);
-  });
-
-  it("a rejected join issues no cookie and leaves no guest principal behind", async () => {
-    const before = await testEnv.DB.prepare("SELECT COUNT(*) AS n FROM principals WHERE kind = 'GUEST'").first<{ n: number }>();
-    mockProjectDO(() => ({ status: 404, body: { error: { code: "INVITE_INVALID", message: "Invalid" } } }));
-    const res = await call("/api/invitations/join", { body: { token, displayName: "Bob", turnstileToken: "ok" } });
-    expect(res.status).toBe(404);
-    expect(sessionCookie(res)).toBeNull();
-    const after = await testEnv.DB.prepare("SELECT COUNT(*) AS n FROM principals WHERE kind = 'GUEST'").first<{ n: number }>();
-    expect(after?.n).toBe(before?.n);
   });
 
   it("malformed tokens are INVITE_INVALID without reaching a DO", async () => {
@@ -187,14 +145,6 @@ describe("invitations", () => {
     }
     expect((await call(`/api/invitations/garbage`)).status).toBe(404);
     expect(calls).toHaveLength(0);
-  });
-
-  it("join Turnstile can come from the X-Turnstile-Token header", async () => {
-    mockProjectDO((req) => (req.op === "join" ? { status: 200, body: { projectId: P } } : { status: 200, body: projectView(P) }));
-    const ok = await call("/api/invitations/join", { body: { token, displayName: "Bob" }, headers: { "x-turnstile-token": "ok" } });
-    expect(ok.status).toBe(200);
-    const bad = await call("/api/invitations/join", { body: { token, displayName: "Bob" }, headers: { "x-turnstile-token": "fail" } });
-    expect(bad.status).toBe(403);
   });
 
   it("preview works without a session (principal null)", async () => {

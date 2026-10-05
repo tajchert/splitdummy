@@ -1,9 +1,7 @@
 import { Hono } from "hono";
 import { JoinSchema } from "@shared/api";
 import { getSession, requireIdempotencyKey } from "../auth/middleware";
-import { createGuest, deleteGuest, toPrincipal, type PrincipalRow } from "../auth/principals";
-import { createSession, writeSessionCookie } from "../auth/session";
-import { verifyTurnstile } from "../auth/turnstile";
+import { toPrincipal } from "../auth/principals";
 import type { AppEnv } from "../lib/context";
 import { ApiError } from "../lib/errors";
 import { clientIp, parseWith, readJsonBody } from "../lib/http";
@@ -35,20 +33,14 @@ invitationRoutes.post("/api/invitations/join", async (c) => {
   const idempotencyKey = requireIdempotencyKey(c);
   const input = parseWith(JoinSchema, await readJsonBody(c.req.raw));
   const { projectId, tokenSecret } = parseInviteToken(input.token);
-  await verifyTurnstile(c.env, input.turnstileToken ?? c.req.header("x-turnstile-token"), ip);
 
-  // No session yet: mint an independent guest principal. Its cookie is only issued once the
-  // DO accepts the join; on rejection the speculative principal is deleted again.
+  // Every new member has a verified email: the join page signs people in (magic link) first.
+  // That sign-in already passed Turnstile, so the join itself doesn't need it.
   const session = await getSession(c);
-  let principal: PrincipalRow;
-  let newGuest = false;
-  if (session) {
-    principal = session.principal;
-  } else {
-    principal = await createGuest(c.env.DB);
-    newGuest = true;
+  if (!session || !session.principal.email) {
+    throw new ApiError("EMAIL_REQUIRED", "Confirm your email to join this group.");
   }
-
+  const principal = session.principal;
   const requestId = c.get("requestId");
   const res = await callProject(c.env, {
     op: "join",
@@ -58,26 +50,14 @@ invitationRoutes.post("/api/invitations/join", async (c) => {
     body: { displayName: input.displayName },
     idempotencyKey,
     requestId,
-  }).catch(async (err: unknown) => {
-    if (newGuest) await deleteGuest(c.env.DB, principal.id);
-    throw err;
   });
+  if (!isOk(res)) return toHttpResponse(c, res, "join");
 
-  if (!isOk(res)) {
-    if (newGuest) await deleteGuest(c.env.DB, principal.id);
-    return toHttpResponse(c, res, "join");
-  }
-
-  if (newGuest) {
-    const { token, expiresAt } = await createSession(c.env.DB, principal);
-    writeSessionCookie(c, token, expiresAt);
-  }
   // Join returns { projectId }; fetch the member view to fill the directory row immediately.
   const view = await callProject(c.env, { op: "getProject", projectId, principal: toPrincipal(principal), requestId }).catch(
     () => null,
   );
   await recordMembership(c, principal.id, view && isOk(view) ? view.body : null, input.displayName);
-
   return toHttpResponse(c, res, "join");
 });
 

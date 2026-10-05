@@ -70,8 +70,3 @@ export async function upgradeGuest(db: D1Database, principalId: string, email: s
     throw err;
   }
 }
-
-/** Removes a guest created speculatively for a join that then failed (no sessions issued yet). */
-export async function deleteGuest(db: D1Database, principalId: string): Promise<void> {
-  await db.prepare("DELETE FROM principals WHERE id = ? AND kind = 'GUEST'").bind(principalId).run();
-}

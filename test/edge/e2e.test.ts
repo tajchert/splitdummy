@@ -11,7 +11,7 @@ import type {
   ReviewDTO,
 } from "@shared/api";
 import { projectStub } from "../../worker/lib/project";
-import { call, mockTurnstile, sessionCookie, signIn, testEnv, uniqueEmail } from "./helpers";
+import { call, guestSession, mockTurnstile, signIn, testEnv, uniqueEmail } from "./helpers";
 
 beforeEach(() => {
   mockTurnstile();
@@ -54,11 +54,10 @@ describe("end to end: create → invite → join → expense → ready → freez
     const preview = await json<{ projectName: string; status: string }>(await call(`/api/invitations/${encodeURIComponent(token)}`));
     expect(preview).toMatchObject({ projectName: "Weekend", status: "OPEN" });
 
-    const joinRes = await call("/api/invitations/join", { body: { token, displayName: "Bob", turnstileToken: "ok" } });
-    const guest = sessionCookie(joinRes);
+    const guest = await signIn(uniqueEmail("bob"));
+    const joinRes = await call("/api/invitations/join", { cookie: guest, body: { token, displayName: "Bob" } });
     const joined = await json<JoinResultDTO>(joinRes);
     expect(joined.projectId).toBe(projectId);
-    expect(guest).not.toBeNull();
     const guestMemberId = joined.memberId;
     const guestGroups = await json<ProjectSummaryDTO[]>(await call("/api/projects", { cookie: guest }));
     expect(guestGroups).toEqual([expect.objectContaining({ id: projectId, isOwner: false })]);
@@ -134,7 +133,7 @@ describe("end to end: create → invite → join → expense → ready → freez
       .toBe("SETTLED");
   });
 
-  it("a guest upgraded by email becomes recoverable inside the DO", async () => {
+  it("a legacy guest member becomes recoverable after signing in", async () => {
     const owner = await signIn(uniqueEmail("owner"));
     const created = await json<ProjectViewDTO>(
       await call("/api/projects", { cookie: owner, body: { name: "Flat", baseCurrency: "EUR", ownerDisplayName: "Ann", turnstileToken: "ok" } }),
@@ -143,9 +142,22 @@ describe("end to end: create → invite → join → expense → ready → freez
     const projectId = created.project.id;
     const invite = await json<InvitationDTO>(await call(`/api/projects/${projectId}/invitations`, { method: "POST", cookie: owner }), 201);
     const token = new URL(invite.url ?? "").hash.slice(1);
-    const joinRes = await call("/api/invitations/join", { body: { token, displayName: "Bob", turnstileToken: "ok" } });
-    const guest = sessionCookie(joinRes);
-    const { memberId } = await json<JoinResultDTO>(joinRes);
+    const g = await guestSession();
+    const guest = g.cookie;
+    const joinRes = await projectStub(testEnv, projectId).handle({
+      op: "join",
+      principal: { principalId: g.principalId, kind: "GUEST", email: null, hasRecoverableAccount: false },
+      params: { projectId, tokenSecret: token },
+      body: { displayName: "Bob" },
+      idempotencyKey: crypto.randomUUID(),
+      requestId: "req_test",
+    });
+    const { memberId } = (joinRes as unknown as { body: JoinResultDTO }).body;
+    await testEnv.DB.prepare(
+      "INSERT INTO project_directory (principal_id, project_id, member_id, status, name, base_currency, project_version, updated_at) VALUES (?, ?, ?, 'ACTIVE', 'Flat', 'EUR', 0, ?)",
+    )
+      .bind(g.principalId, projectId, memberId, new Date().toISOString())
+      .run();
 
     const memberOf = async () =>
       (await json<ProjectViewDTO>(await call(`/api/projects/${projectId}`, { cookie: owner }))).members.find((m) => m.id === memberId);
@@ -178,16 +190,7 @@ describe("end to end: create → invite → join → expense → ready → freez
   });
 
   it("guests cannot create groups; the DO is never asked", async () => {
-    const owner = await signIn(uniqueEmail("owner"));
-    const created = await json<ProjectViewDTO>(
-      await call("/api/projects", { cookie: owner, body: { name: "Flat", baseCurrency: "EUR", ownerDisplayName: "Ann", turnstileToken: "ok" } }),
-      201,
-    );
-    const invite = await json<InvitationDTO>(await call(`/api/projects/${created.project.id}/invitations`, { method: "POST", cookie: owner }), 201);
-    const joinRes = await call("/api/invitations/join", {
-      body: { token: new URL(invite.url ?? "").hash.slice(1), displayName: "Bob", turnstileToken: "ok" },
-    });
-    const guest = sessionCookie(joinRes);
+    const guest = (await guestSession()).cookie;
     const res = await call("/api/projects", { cookie: guest, body: { name: "Mine", baseCurrency: "EUR", ownerDisplayName: "Bob", turnstileToken: "ok" } });
     expect(res.status).toBe(403);
   });

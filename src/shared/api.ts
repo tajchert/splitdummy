@@ -385,6 +385,7 @@ export const PutRateSchema = z.object({
 export const JoinSchema = z.object({
   token: z.string().min(16).max(200),
   displayName: DisplayNameSchema,
+  /** Accepted for compatibility and ignored: joining requires a signed-in verified email instead. */
   turnstileToken: z.string().max(4096).optional(),
 });
 
