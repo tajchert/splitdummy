@@ -1,5 +1,4 @@
 /** Ledger ops: expenses, refunds, adjustments, readiness. All require the active collecting round. */
-import { setEntryAttachments, trashEntryAttachments } from "./attachments";
 import {
   AdjustmentInputSchema,
   DeleteEntrySchema,
@@ -28,7 +27,7 @@ import type { EntryRow, MemberRow, RoundRow } from "../store";
 import { newId, type Tx } from "../tx";
 import type { DoRequest } from "../types";
 import { entryDto } from "../views";
-import { extrasSummary, normalizeNote } from "./attachments";
+import { extrasSummary, normalizeNote, setEntryAttachments, trashEntryAttachments } from "./attachments";
 import { ok, rateErrorMessage, type OpResult } from "./project";
 
 interface PreparedEntry {

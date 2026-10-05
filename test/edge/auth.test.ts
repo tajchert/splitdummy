@@ -198,6 +198,7 @@ describe("sessions", () => {
     const cookie = await signIn(uniqueEmail());
     const out = await call("/api/auth/logout", { method: "POST", cookie });
     expect(out.status).toBe(204);
+    expect(out.headers.get("clear-site-data")).toBe('"cache"');
     expect(out.headers.getSetCookie().join()).toMatch(/sd_session=;/);
     expect((await call("/api/me", { cookie })).status).toBe(401);
   });

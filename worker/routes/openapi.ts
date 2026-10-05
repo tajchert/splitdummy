@@ -95,7 +95,7 @@ const operations: Partial<Record<keyof typeof api.ENDPOINTS, Operation>> = {
     id, at: z.string(), actorMemberId: nullableText, action: z.string(), roundId: nullableText, entityId: nullableText,
     summary: z.string(), details: z.record(z.string(), z.unknown()).nullable() })) }) },
   export: { summary: "Export the group as CSV" },
-  uploadAttachment: { summary: "Upload a receipt photo", description: "Send the image bytes as the request body with Content-Type image/jpeg or image/webp (at most 1.5 MB and 4096 px per side). Photo metadata, including EXIF orientation, is removed, so upload upright images. The photo is visible only to you until you attach it with attachmentIds on createEntry or updateEntry; unattached uploads are deleted after 24 hours. Collecting round only.", rawBody: api.ATTACHMENT_TYPES, response: attachment, created: true },
+  uploadAttachment: { summary: "Upload a receipt photo", description: "Send the image bytes as the request body with Content-Type image/jpeg or image/webp (at most 1.5 MB and 4096 px per side). Photo metadata, including EXIF orientation, is removed, so upload upright images. The photo is visible only to you until you attach it with attachmentIds on createEntry or updateEntry; unattached uploads are deleted after 24 hours, by a nightly cleanup. Collecting round only.", rawBody: api.ATTACHMENT_TYPES, response: attachment, created: true },
   getAttachment: { summary: "Download a receipt photo", description: "Members see photos of saved entries; a not-yet-attached upload only its uploader.", binaryResponse: api.ATTACHMENT_TYPES },
 };
 
@@ -104,7 +104,7 @@ function jsonSchema(schema: z.ZodType, io: "input" | "output" = "output") {
   return result;
 }
 const errors = Object.fromEntries(Object.entries({ 401: "Invalid, expired or revoked key", 403: "Read-only key or insufficient permissions",
-  404: "Unavailable or not a member", 409: "Stale revision, frozen round, state or idempotency conflict", 422: "Invalid input", 429: "Rate limited", 500: "Unexpected error" })
+  404: "Unavailable or not a member", 409: "Stale revision, frozen round, state or idempotency conflict", 413: "Payload too large (photo uploads over 1.5 MB)", 422: "Invalid input", 429: "Rate limited", 500: "Unexpected error" })
   .map(([status, description]) => [status, { description, content: { "application/json": { schema: jsonSchema(error) } } }]));
 
 export function openApiDocument(origin: string) {

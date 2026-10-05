@@ -133,6 +133,7 @@ accountRoutes.delete("/api/me", async (c) => {
     c.env.DB.prepare("DELETE FROM principals WHERE id = ?").bind(principal.id),
   ]);
   clearSessionCookie(c);
+  c.header("Clear-Site-Data", '"cache"');
   logInfo("account deleted", {
     requestId,
     ownedProjects: states.filter((s) => s.info?.role === "OWNER").length,

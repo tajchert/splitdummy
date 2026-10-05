@@ -44,7 +44,7 @@ export function registerAttachment(tx: Tx, req: DoRequest): OpResult {
   const body = parseBody(RegisterSchema, req.body);
   const pending = tx.store.count("SELECT COUNT(*) AS n FROM attachments WHERE entry_id IS NULL AND uploader_member_id = ?", me.id);
   if (pending >= LIMITS.pendingAttachmentsPerMember) {
-    throw limitExceeded(`You can have at most ${LIMITS.pendingAttachmentsPerMember} unsaved photos. Save or discard an expense first.`);
+    throw limitExceeded(`You have ${LIMITS.pendingAttachmentsPerMember} unsaved photos. Save the expense, or wait — unsaved photos are cleared within a day.`);
   }
   if (tx.store.count("SELECT COUNT(*) AS n FROM attachments") >= LIMITS.attachments) {
     throw limitExceeded(`A group can have at most ${LIMITS.attachments} photos.`);
@@ -112,7 +112,7 @@ export function trashEntryAttachments(tx: Tx, entryId: string): void {
 export function takeAttachmentTrash(tx: Tx): OpResult {
   if (tx.principal) throw forbidden("Photo cleanup is internal.");
   tx.requireProject();
-  const cutoff = new Date(Date.now() - PENDING_ATTACHMENT_TTL_MS).toISOString();
+  const cutoff = new Date(Date.parse(tx.now) - PENDING_ATTACHMENT_TTL_MS).toISOString();
   for (const { id } of tx.store.all<{ id: string }>("SELECT id FROM attachments WHERE entry_id IS NULL AND created_at < ?", cutoff)) {
     trash(tx, id);
   }

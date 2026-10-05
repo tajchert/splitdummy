@@ -13,7 +13,7 @@ export async function handleScheduled(env: Env): Promise<void> {
   await housekeeping(env);
 }
 
-/** Runs `fn` for every directory project, BACKUP_CONCURRENCY at a time; counts failures (logged by the caller). */
+/** Runs `fn` for every directory project, BACKUP_CONCURRENCY at a time; counts failures (logs each one itself). */
 async function forEachProject(env: Env, fn: (projectId: string) => Promise<void>, label: string): Promise<{ ok: number; failed: number }> {
   const { results } = await env.DB.prepare("SELECT DISTINCT project_id FROM project_directory").all<{ project_id: string }>();
   const queue = results.map((r) => r.project_id);

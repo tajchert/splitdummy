@@ -104,7 +104,7 @@ ${examples.python}
 Expenses and refunds accept an optional note (up to 1000 characters) and up to 5 photos.
 1. Upload each photo: POST /api/projects/{projectId}/attachments with the image bytes as the body, Content-Type image/jpeg or image/webp, and an Idempotency-Key. At most 1.5 MB and 4096 px per side. The response is 201 with {"id","contentType","bytes","width","height"}. Uploads work only while the round is COLLECTING.
 2. Save the expense with "attachmentIds": ["att_…"] in display order.
-Photo metadata, including EXIF orientation, is removed, so upload upright images. An uploaded photo is visible only to you until it is attached; unattached uploads are deleted after 24 hours.
+Photo metadata, including EXIF orientation, is removed, so upload upright images. An uploaded photo is visible only to you until it is attached; unattached uploads are deleted after 24 hours, by a nightly cleanup.
 On updates, omitting note or attachmentIds keeps them; null or [] clears them. Download a photo with GET /api/projects/{projectId}/attachments/{attachmentId}; members can download photos of saved expenses.
 
 ## Data and retries
@@ -132,7 +132,7 @@ The OpenAPI schema describes all supported group operations, request fields and 
 Errors are JSON: {"error":{"code":"VALIDATION","message":"...","field":"originalAmount"}}. field and details are optional.
 401: invalid, revoked or expired key. 403: read-only key or insufficient role. 404: unavailable or not a member.
 409: stale revision, frozen round, state conflict or changed content under an existing idempotency key.
-422: invalid input. 429: rate limited. 500: unexpected server error (use X-Request-Id when reporting).
+413: photo upload over 1.5 MB. 422: invalid input. 429: rate limited. 500: unexpected server error (use X-Request-Id when reporting).
 
 ## AI tools
 Import ${origin}/api/openapi.json into an OpenAPI-compatible tool and configure bearer authentication with your key.

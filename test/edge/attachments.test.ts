@@ -82,6 +82,18 @@ describe("photo upload", () => {
     expect((await call(photo, { cookie: g.bob })).status).toBe(404);
   });
 
+  it("works with API keys: READ cannot upload, WRITE uploads without Origin and downloads with a bearer token", async () => {
+    const g = await group();
+    const issue = async (scope: string) => (await json<{ token: string }>(await call("/api/me/api-keys", { cookie: g.owner, body: { name: "k", scope } }), 201)).token;
+    const read = { authorization: `Bearer ${await issue("READ")}` };
+    const write = { authorization: `Bearer ${await issue("WRITE")}` };
+    expect((await upload(g.projectId, "", webp(), "image/webp", { headers: read, origin: null })).status).toBe(403);
+    const a = await json<AttachmentDTO>(await upload(g.projectId, "", webp(), "image/webp", { headers: write, origin: null }), 201);
+    const got = await call(`${uploadPath(g.projectId)}/${a.id}`, { headers: write });
+    expect(got.status).toBe(200);
+    expect(got.headers.get("content-type")).toBe("image/webp");
+  });
+
   it("rejects wrong types, mismatched bytes, oversize and oversized dimensions", async () => {
     const g = await group();
     expect((await upload(g.projectId, g.owner, webp(), "image/png")).status).toBe(422);

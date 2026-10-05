@@ -20,8 +20,8 @@ export function Privacy() {
         <ul>
           <li>Your email, if you sign in with one, and your display name.</li>
           <li>What you add to groups: names, members, expenses, notes, receipt photos and payments. Members of a group can see it.</li>
-          <li>Photos are shrunk in your browser and their location and camera details are removed before they’re stored. A photo is deleted when it’s removed from its expense, when the expense or group is deleted, or after 24 hours if it was never saved with an expense.</li>
-          <li>Your browser keeps a sign-in cookie, your theme and unsent drafts. No tracking cookies, no ads, nothing sold.</li>
+          <li>Photos are shrunk in your browser and their location and camera details are removed before they’re stored. A photo is deleted when it’s removed from its expense, when the expense or group is deleted, or, if it was never saved with an expense, within a day or two (a nightly cleanup).</li>
+          <li>Your browser keeps a sign-in cookie, your theme and unsent drafts, and may keep copies of photos you viewed until you sign out. No tracking cookies, no ads, nothing sold.</li>
         </ul>
       </section>
 

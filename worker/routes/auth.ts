@@ -137,6 +137,8 @@ authRoutes.post("/api/auth/logout", async (c) => {
   const session = await getSession(c);
   if (session) await revokeSession(c.env.DB, session.tokenHash);
   clearSessionCookie(c);
+  // Photos are cached privately for a year; a shared device must not keep them after sign-out.
+  c.header("Clear-Site-Data", '"cache"');
   return c.body(null, 204);
 });
 

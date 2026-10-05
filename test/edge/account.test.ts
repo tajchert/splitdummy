@@ -164,6 +164,7 @@ describe("account deletion", () => {
 
     expect((await deleteAccount(ann, {})).status).toBe(422);
     const res = await deleteAccount(ann);
+    expect(res.headers.get("clear-site-data")).toBe('"cache"');
     expect(await json(res)).toEqual({ ok: true });
     expect(res.headers.getSetCookie().some((c) => /sd_session=;/.test(c) && /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c))).toBe(true);
 
