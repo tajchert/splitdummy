@@ -21,6 +21,7 @@ const Account = lazyPage(() => import("./pages/Account"), "Account");
 const ApiDocs = lazyPage(() => import("./pages/ApiDocs"), "ApiDocs");
 const CreateGroup = lazyPage(() => import("./pages/CreateGroup"), "CreateGroup");
 const Join = lazyPage(() => import("./pages/Join"), "Join");
+const Invite = lazyPage(() => import("./pages/Invite"), "Invite");
 const BalanceExplain = lazyPage(() => import("./pages/group/BalanceExplain"), "BalanceExplain");
 const Review = lazyPage(() => import("./pages/group/Review"), "Review");
 const History = lazyPage(() => import("./pages/group/History"), "History");
@@ -49,6 +50,8 @@ export function AppRoutes() {
         <Route path="/groups/new" element={<CreateGroup />} />
         <Route path="/join" element={<Join />} />
         <Route path="/join/:token" element={<Join />} />
+        <Route path="/invite" element={<Invite />} />
+        <Route path="/invite/:token" element={<Invite />} />
         <Route path="/projects/:projectId" element={<ProjectRedirect />} />
         <Route path="/g/:projectId" element={<GroupLayout />}>
           <Route element={<GroupHome />}>

@@ -137,7 +137,7 @@ export function SignIn() {
               </button>
             </form>
             <p className="tiny muted">
-              Joining a group from an invitation? Open the link you were sent; you can join as a guest without an email.
+              Joining a group from an invitation? Open the link you were sent and enter your email there.
             </p>
           </>
         )}
