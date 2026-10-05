@@ -207,7 +207,7 @@ function roundView(p: MockProject, r: MockRound): RoundViewDTO {
   const active = p.members.filter((m) => m.status === "ACTIVE" && m.kind !== "PLACEHOLDER");
   return {
     round: { ...r.round },
-    entries: r.entries.map((e) => ({ ...e })),
+    entries: r.entries.map((e) => ({ ...e, note: e.note ?? null, attachments: e.attachments ?? [] })),
     readiness: active.map((m) => ({ memberId: m.id, ready: r.readiness[m.id]?.ready ?? false, markedAt: r.readiness[m.id]?.markedAt ?? null })),
     balances,
     instructions: r.instructions.map((i) => ({ ...i })),
@@ -287,6 +287,8 @@ function buildEntry(p: MockProject, roundId: string, body: EntryBody, actor: str
     adjustmentEffects: null,
     correctedEntryId: null,
     correctedRoundId: null,
+    note: body.note === undefined ? (prev?.note ?? null) : body.note?.trim() || null,
+    attachments: prev?.attachments ?? [],
     revision: (prev?.revision ?? 0) + 1,
     createdAt: prev?.createdAt ?? t,
     updatedAt: t,
@@ -1309,6 +1311,8 @@ export function createMockApi(): MockApi {
           adjustmentEffects: effects,
           correctedEntryId: orig.id,
           correctedRoundId: d.data!.correctedRoundId,
+          note: null,
+          attachments: [],
           revision: 1,
           createdAt: t,
           updatedAt: t,
