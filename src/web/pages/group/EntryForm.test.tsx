@@ -91,6 +91,36 @@ describe("expense form", () => {
     expect(spy.mock.calls[1]![2].idempotencyKey).toBe(spy.mock.calls[0]![2].idempotencyKey);
   });
 
+  it("compresses photos one at a time, in pick order, and still uploads all of them", async () => {
+    const view = await newSingleCurrencyGroup(api);
+    const gates: Array<() => void> = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const order: string[] = [];
+    const gated = async (f: Blob) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      order.push((f as File).name);
+      await new Promise<void>((resolve) => gates.push(resolve));
+      inFlight--;
+      return { blob: new Blob([f], { type: "image/webp" }), width: 10, height: 10 };
+    };
+    vi.mocked(compressReceipt).mockImplementationOnce(gated).mockImplementationOnce(gated).mockImplementationOnce(gated);
+    const upload = vi.spyOn(api, "uploadAttachment");
+    renderAt(api, `/g/${view.project.id}/new`);
+    await screen.findByLabelText("What was it?", { selector: "input" });
+    pick("a.jpg", "b.jpg", "c.jpg");
+    for (let i = 1; i <= 3; i++) {
+      await waitFor(() => expect(gates).toHaveLength(i));
+      expect(inFlight).toBe(1);
+      gates[i - 1]!();
+    }
+    await uploadsSettled();
+    expect(maxInFlight).toBe(1);
+    expect(order).toEqual(["a.jpg", "b.jpg", "c.jpg"]);
+    expect(upload).toHaveBeenCalledTimes(3);
+  });
+
   it("refuses to save while a photo failed to upload", async () => {
     const view = await newSingleCurrencyGroup(api);
     vi.spyOn(api, "uploadAttachment").mockRejectedValue(new Error("offline"));

@@ -57,6 +57,14 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
   const [tiles, setTiles] = useState<PhotoTile[]>(() => savedTiles(initialIds));
   const patch = useCallback((key: string, p: Partial<PhotoTile>) => setTiles((ts) => ts.map((t) => (t.key === key ? { ...t, ...p } : t))), []);
 
+  /** Compression runs one photo at a time (several full-resolution decodes at once can crash mobile Safari); uploads may overlap. */
+  const compressing = useRef<Promise<unknown>>(Promise.resolve());
+  const compressInTurn = useCallback((file: Blob) => {
+    const turn = compressing.current.then(() => compressReceipt(file));
+    compressing.current = turn.catch(() => {});
+    return turn;
+  }, []);
+
   const process = useCallback(
     async (key: string) => {
       const item = local.current.get(key);
@@ -64,7 +72,7 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
       try {
         if (!item.compressed) {
           patch(key, { status: "compressing", error: null });
-          item.compressed = (await compressReceipt(item.file)).blob;
+          item.compressed = (await compressInTurn(item.file)).blob;
           if (!local.current.has(key)) return;
           if (item.objectUrl) URL.revokeObjectURL(item.objectUrl);
           item.objectUrl = URL.createObjectURL(item.compressed);
@@ -80,7 +88,7 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
         patch(key, { status: "failed", error: unreadable ? err.message : errorMessage(err), canRetry: !unreadable });
       }
     },
-    [api, projectId, patch],
+    [api, projectId, patch, compressInTurn],
   );
 
   /** The ids last reported (or given), so only real changes reach onIdsChange. */

@@ -2249,6 +2249,8 @@
   padding: 0;
   border: 0;
   background: #000;
+}
+.photo-viewer[open] {
   display: flex;
   flex-direction: column;
 }

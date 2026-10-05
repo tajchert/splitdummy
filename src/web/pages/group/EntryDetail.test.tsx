@@ -53,4 +53,43 @@ describe("expense detail note and photos", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close photo" }));
     expect(screen.queryByRole("dialog", { name: /Photo \d of 2/ })).toBeNull();
   });
+
+  async function seedEntry(photoCount: number, note?: string) {
+    const view = await api.createProject({ name: "Ski", baseCurrency: "EUR", multiCurrencyEnabled: false, ownerDisplayName: "Maya" }, { idempotencyKey: crypto.randomUUID() });
+    const pid = view.project.id;
+    const ids: string[] = [];
+    for (let i = 0; i < photoCount; i++) ids.push((await api.uploadAttachment(pid, new Blob([String(i)], { type: "image/webp" }), { idempotencyKey: crypto.randomUUID() })).id);
+    await api.createEntry(pid, view.current.round.id, {
+      type: "EXPENSE", description: "Lift passes", occurredAt: "2026-10-01", originalAmount: "9000", originalCurrency: "EUR",
+      conversion: { method: "IDENTITY" }, payerMemberId: view.me.memberId, splitMode: "EQUAL", participants: [{ memberId: view.me.memberId }],
+      ...(note ? { note } : {}), ...(ids.length ? { attachmentIds: ids } : {}),
+    }, { idempotencyKey: crypto.randomUUID() });
+    return { pid, entry: (await api.getProject(pid)).current.entries[0]! };
+  }
+
+  it("Escape closes only the viewer, and the arrow keys wrap around", async () => {
+    const { pid, entry } = await seedEntry(2, "A note");
+    renderAt(api, `/g/${pid}/e/${entry.id}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Open photo 1 of 2" }));
+    const viewer = () => screen.getByRole("dialog", { name: /Photo \d of 2/ });
+    fireEvent.keyDown(viewer(), { key: "ArrowRight" });
+    expect(viewer().getAttribute("aria-label")).toBe("Photo 2 of 2");
+    fireEvent.keyDown(viewer(), { key: "ArrowRight" });
+    expect(viewer().getAttribute("aria-label")).toBe("Photo 1 of 2");
+    fireEvent.keyDown(viewer(), { key: "ArrowLeft" });
+    expect(viewer().getAttribute("aria-label")).toBe("Photo 2 of 2");
+    fireEvent(viewer(), new Event("cancel", { cancelable: true }));
+    expect(screen.queryByRole("dialog", { name: /Photo \d of 2/ })).toBeNull();
+    expect(screen.getByText("A note")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open photo 1 of 2" })).toBeTruthy();
+  });
+
+  it("flags notes and photos in the expense list", async () => {
+    const { pid } = await seedEntry(2, "A note");
+    renderAt(api, `/g/${pid}`);
+    expect(await screen.findByText("Has a note")).toBeTruthy();
+    const photos = screen.getByText("Photos");
+    expect(photos.className).toContain("sr-only");
+    expect(photos.parentElement!.textContent).toMatch(/Photos 2$/);
+  });
 });
