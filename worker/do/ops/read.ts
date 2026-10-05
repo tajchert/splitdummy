@@ -73,6 +73,8 @@ const BACKUP_TABLES = [
   "confirmed_transfers",
   "audit_events",
   "outbox",
+  "attachments",
+  "attachment_trash",
 ] as const;
 
 /** Internal (edge cron) full dump for R2. Idempotency responses are omitted: they are derivable and large. */

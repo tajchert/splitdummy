@@ -12,6 +12,7 @@ import { ApiError, invalid, unauthenticated } from "./errors";
 import { accountDeletionInfo, anonymizeMember, deletionPrincipals } from "./ops/account";
 import { acceptOwnership, createInvite, createProject, deleteRate, join, leave, previewInvite, principalUpdated, putRate, removeMember, renameMe, revokeInvite, transferOwnership, updateSettings, type OpResult } from "./ops/project";
 import { acceptMemberInvite, addMember, cancelMemberInvite, inviteMember, previewMemberInvite, renameMember } from "./ops/members";
+import { ackAttachmentTrash, readAttachment, registerAttachment, takeAttachmentTrash } from "./ops/attachments";
 import { createAdjustment, createEntry, deleteEntry, setReadiness, updateEntry } from "./ops/ledger";
 import { backupSnapshot, exportCsv, getHistory, getProject, getReview, getRound } from "./ops/read";
 import { freeze, markDisputed, markReceived, markSent, scheduledFreeze, setFreezeSchedule, startRound } from "./ops/settlement";
@@ -32,7 +33,8 @@ type ReadOp =
   | "getHistory"
   | "exportCsv"
   | "backupSnapshot"
-  | "accountDeletionInfo";
+  | "accountDeletionInfo"
+  | "readAttachment";
 
 const READ_OPS: Record<ReadOp, (tx: Tx, req: DoRequest, prepared: Prepared) => DoResponse> = {
   getProject: (tx) => getProject(tx),
@@ -44,10 +46,11 @@ const READ_OPS: Record<ReadOp, (tx: Tx, req: DoRequest, prepared: Prepared) => D
   exportCsv: (tx) => exportCsv(tx),
   backupSnapshot: (tx) => backupSnapshot(tx),
   accountDeletionInfo: (tx) => accountDeletionInfo(tx),
+  readAttachment: (tx, req) => readAttachment(tx, req),
 };
 
 /** Ops that the edge calls on its own behalf without an idempotency key. */
-const KEYLESS_OPS = new Set<DoOp>(["principalUpdated", "anonymizeMember"]);
+const KEYLESS_OPS = new Set<DoOp>(["principalUpdated", "anonymizeMember", "takeAttachmentTrash", "ackAttachmentTrash"]);
 
 const OUTBOX_BATCH = 20;
 const OUTBOX_MAX_BACKOFF_MS = 10 * 60 * 1000;
@@ -189,6 +192,12 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
 
   private mutate(op: MutationOp, tx: Tx, req: DoRequest, prepared: Prepared): OpResult {
     switch (op) {
+      case "registerAttachment":
+        return registerAttachment(tx, req);
+      case "takeAttachmentTrash":
+        return takeAttachmentTrash(tx);
+      case "ackAttachmentTrash":
+        return ackAttachmentTrash(tx, req);
       case "createProject":
         return createProject(tx, req);
       case "updateSettings":
