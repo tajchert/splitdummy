@@ -65,10 +65,10 @@ export function ApiDocs() {
         <h2 className="card-title">Notes and receipt photos</h2>
         <p>Expenses and refunds accept an optional <code>note</code> (up to 1000 characters) and up to 5 photos.</p>
         <ol>
-          <li>Upload each photo: <code>POST /api/projects/{"{projectId}"}/attachments</code> with the image bytes as the body, <code>Content-Type</code> <code>image/jpeg</code> or <code>image/webp</code>, and an <code>Idempotency-Key</code>. At most 1.5 MB and 4096 px per side. The response contains the photo <code>id</code>.</li>
+          <li>Upload each photo: <code>POST /api/projects/{"{projectId}"}/attachments</code> with the image bytes as the body, <code>Content-Type</code> <code>image/jpeg</code> or <code>image/webp</code>, and an <code>Idempotency-Key</code>. At most 1.5 MB and 4096 px per side. The response is <code>201</code> with <code>{"{"}"id","contentType","bytes","width","height"{"}"}</code>. Uploads work only while the round is <code>COLLECTING</code>.</li>
           <li>Save the expense with <code>"attachmentIds": ["att_…"]</code> in display order.</li>
         </ol>
-        <p className="small muted">Photo metadata, including EXIF orientation, is removed, so upload upright images. An uploaded photo is visible only to you until it is attached; unattached uploads are deleted after 24 hours. On updates, omitting <code>note</code> or <code>attachmentIds</code> keeps them; <code>null</code> or <code>[]</code> clears them. Download a photo with <code>GET /api/projects/{"{projectId}"}/attachments/{"{attachmentId}"}</code>.</p>
+        <p className="small muted">Photo metadata, including EXIF orientation, is removed, so upload upright images. An uploaded photo is visible only to you until it is attached; unattached uploads are deleted after 24 hours. On updates, omitting <code>note</code> or <code>attachmentIds</code> keeps them; <code>null</code> or <code>[]</code> clears them. Download a photo with <code>GET /api/projects/{"{projectId}"}/attachments/{"{attachmentId}"}</code>; members can download photos of saved expenses.</p>
       </section>
 
       <section className="card">

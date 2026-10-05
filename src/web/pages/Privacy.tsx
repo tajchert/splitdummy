@@ -55,7 +55,7 @@ export function Privacy() {
         </p>
       </section>
 
-      <p className="small muted">Updated 5 October 2026.</p>
+      <p className="small muted">Updated 6 October 2026.</p>
     </main>
   </>;
 }

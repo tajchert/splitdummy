@@ -102,10 +102,10 @@ ${examples.python}
 
 ## Notes and receipt photos
 Expenses and refunds accept an optional note (up to 1000 characters) and up to 5 photos.
-1. Upload each photo: POST /api/projects/{projectId}/attachments with the image bytes as the body, Content-Type image/jpeg or image/webp, and an Idempotency-Key. At most 1.5 MB and 4096 px per side. The response contains the photo id.
+1. Upload each photo: POST /api/projects/{projectId}/attachments with the image bytes as the body, Content-Type image/jpeg or image/webp, and an Idempotency-Key. At most 1.5 MB and 4096 px per side. The response is 201 with {"id","contentType","bytes","width","height"}. Uploads work only while the round is COLLECTING.
 2. Save the expense with "attachmentIds": ["att_…"] in display order.
 Photo metadata, including EXIF orientation, is removed, so upload upright images. An uploaded photo is visible only to you until it is attached; unattached uploads are deleted after 24 hours.
-On updates, omitting note or attachmentIds keeps them; null or [] clears them. Download a photo with GET /api/projects/{projectId}/attachments/{attachmentId}.
+On updates, omitting note or attachmentIds keeps them; null or [] clears them. Download a photo with GET /api/projects/{projectId}/attachments/{attachmentId}; members can download photos of saved expenses.
 
 ## Data and retries
 - Money is an integer string in minor units, never a floating-point number. "1250" = 12.50 PLN/EUR/USD (exponent 2), 1250 JPY (0), or 1.250 KWD (3). Use project.baseExponent or entry.originalExponent.
