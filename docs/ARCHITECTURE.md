@@ -15,6 +15,7 @@ browser ──HTTPS──▶ Worker (worker/index.ts, Hono)
 ProjectDO (worker/do/) — one SQLite DO per project: the ONLY accounting/permission authority
 D1 (migrations/) — accounts, sessions, API key hashes, sign-in tokens, guest principals, project directory
 R2 BACKUPS — versioned JSON exports for recovery
+R2 ATTACHMENTS — receipt photos (projects/<id>/attachments/<attachmentId>), metadata stripped at upload; the DO owns visibility and the purge queue (attachment_trash), the daily cron deletes from R2
 EMAIL (send_email) — magic links + notifications
 ```
 

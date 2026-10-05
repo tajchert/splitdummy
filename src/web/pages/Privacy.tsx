@@ -19,7 +19,8 @@ export function Privacy() {
         <h2 className="card-title">What we keep</h2>
         <ul>
           <li>Your email, if you sign in with one, and your display name.</li>
-          <li>What you add to groups: names, members, expenses and payments. Members of a group can see it.</li>
+          <li>What you add to groups: names, members, expenses, notes, receipt photos and payments. Members of a group can see it.</li>
+          <li>Photos are shrunk in your browser and their location and camera details are removed before they’re stored. A photo is deleted when it’s removed from its expense, when the expense or group is deleted, or after 24 hours if it was never saved with an expense.</li>
           <li>Your browser keeps a sign-in cookie, your theme and unsent drafts. No tracking cookies, no ads, nothing sold.</li>
         </ul>
       </section>
@@ -45,7 +46,7 @@ export function Privacy() {
         <h2 className="card-title">How long, and your rights</h2>
         <p>
           We keep your data while your account or group exists. Deleting your account in <Link to="/account">Account</Link> removes your email and name,
-          deletes the groups you own with their backups, and anonymizes you in other groups. Backups of a group are kept until the group is deleted.
+          deletes the groups you own with their backups and photos, and anonymizes you in other groups. Backups of a group are kept until the group is deleted.
         </p>
         <p>
           We rely on providing the service you asked for (GDPR Art. 6(1)(b)) and on our legitimate interest in keeping it secure and working (Art. 6(1)(f)).
