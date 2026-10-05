@@ -9,17 +9,25 @@ Visual design: [`../design/SplitDummy.dc.html`](../design/SplitDummy.dc.html) (C
 ```
 browser ──HTTPS──▶ Worker (worker/index.ts, Hono)
                     ├─ static assets (Vite build of src/web, SPA fallback)
-                    ├─ /api/*  auth (D1 sessions) → ProjectDO.handle(DoRequest)  [RPC]
+                    ├─ /api/*  auth (D1 sessions or personal API keys) → ProjectDO.handle(DoRequest)  [RPC]
                     ├─ /api/projects/:id/live  → WebSocket forwarded to ProjectDO.fetch
                     └─ queue consumer (splitdummy-events): directory projection + email
 ProjectDO (worker/do/) — one SQLite DO per project: the ONLY accounting/permission authority
-D1 (migrations/) — accounts, sessions, sign-in tokens, guest principals, project directory
+D1 (migrations/) — accounts, sessions, API key hashes, sign-in tokens, guest principals, project directory
 R2 BACKUPS — versioned JSON exports for recovery
 EMAIL (send_email) — magic links + notifications
 ```
 
 Environments: `production` → `splitdummy.app`, `staging` → `staging.splitdummy.app` (`wrangler deploy --env staging`).
 Account `7e814786800e88ac74b5acc9033370d4`. Resources are already created (see `wrangler.jsonc`).
+
+## Public API
+
+Users create and revoke personal keys in Account. Keys are shown once, stored as SHA-256 hashes, expire after 90 days, and have READ or WRITE access (20 active keys per account).
+`Authorization: Bearer sd_…` authenticates the existing group endpoints and `GET /api/me`; ProjectDO remains the membership/role authority. The public allowlist is in `src/shared/public-api.ts`.
+Bearer authentication and scope checks run before the origin guard. Only validated keys bypass cookie CSRF checks; account/auth/key-management routes and WebSockets remain unavailable to keys.
+Key creation is intentionally not automatically retried because the secret cannot be replayed. Group mutations retain existing idempotency and version checks.
+Public user docs: `/docs/api`; machine-readable guide: `/api/docs`; OpenAPI 3.1 schema: `/api/openapi.json` (request schemas generated from the existing Zod contracts).
 
 ## Contracts (change only with coordinator approval)
 

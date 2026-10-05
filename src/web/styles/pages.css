@@ -2129,3 +2129,22 @@
     animation-delay: 0s;
   }
 }
+.api-docs { max-width: 800px; }
+.api-docs .card { margin-top: 20px; }
+.api-docs p { line-height: 1.65; }
+.api-doc-links, .api-key-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.api-code { min-width: 0; margin: 18px 0; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface2); overflow: hidden; }
+.api-code-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.api-code pre { margin: 0; padding: 16px; overflow-x: auto; font-size: 12px; line-height: 1.7; tab-size: 4; }
+.api-docs code, .api-key-token { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.api-docs li { margin: 10px 0; line-height: 1.65; }
+.api-rules { padding-left: 20px; }
+.api-errors { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 18px; line-height: 1.6; }
+.api-errors dt { font-weight: 700; }
+.api-errors dd { margin: 0; }
+.api-key-form { display: grid; gap: 14px; margin-top: 18px; }
+.api-key-secret { margin-top: 18px; padding: 16px; background: var(--accent-soft); border-radius: var(--r-md); }
+.api-key-secret .api-key-actions { margin-top: 12px; }
+.api-key-list { padding: 0; margin: 18px 0 0; list-style: none; }
+.api-key-list li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.api-key-info { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }

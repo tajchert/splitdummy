@@ -180,6 +180,7 @@ export function Landing() {
           EN
         </span>
         <span>Splitdummy never moves money.</span>
+        <Link to="/docs/api">API docs</Link>
       </footer>
     </div>
   );

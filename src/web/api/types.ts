@@ -1,6 +1,9 @@
 import type { z } from "zod";
 import type {
   AdjustmentInputSchema,
+  ApiKeyDTO,
+  CreatedApiKeyDTO,
+  CreateApiKeySchema,
   AttachEmailSchema,
   ConfigDTO,
   CreateProjectSchema,
@@ -76,6 +79,10 @@ export interface Api {
   getConfig(): Promise<ConfigDTO>;
   /** null when there is no session (401). */
   getMe(): Promise<MeDTO | null>;
+  listApiKeys(): Promise<ApiKeyDTO[]>;
+  /** Single attempt: the secret is shown once and creation must not be auto-retried. */
+  createApiKey(body: z.input<typeof CreateApiKeySchema>): Promise<CreatedApiKeyDTO>;
+  revokeApiKey(id: string): Promise<void>;
   requestSignIn(body: RequestSignInBody, o: MutationOptions): Promise<SignInRequestedDTO>;
   /** Exchange the /auth/confirm#token=… fragment for a session; resolves with where to go next. */
   verifySignIn(token: string, o: MutationOptions): Promise<SignInVerifiedDTO>;

@@ -3,6 +3,9 @@ import { ApiError, unauthenticated } from "../lib/errors";
 import { isAllowedOrigin } from "../lib/env";
 import type { AppContext, AppEnv } from "../lib/context";
 import { lookupSession, readSessionCookie, type SessionRecord } from "./session";
+import { lookupApiKey } from "./api-keys";
+import { isPublicApiOperation } from "@shared/public-api";
+import { enforceLimit } from "../lib/ratelimit";
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_.:-]{8,128}$/;
@@ -32,9 +35,28 @@ export function requireIdempotencyKey(c: AppContext): string {
   return key;
 }
 
-/** CSRF defence: every state-changing /api request must come from the app's own origin. */
+/** A supplied Authorization header is authoritative; invalid keys never fall back to cookies. */
+export const apiKeyAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const authorization = c.req.header("authorization");
+  if (authorization !== undefined) {
+    const session = await lookupApiKey(c.env.DB, authorization);
+    if (!session) throw new ApiError("UNAUTHENTICATED", "Invalid, expired, or revoked API key.");
+    c.set("session", session);
+    if (!isPublicApiOperation(c.req.method, c.req.path)) {
+      throw new ApiError("FORBIDDEN", "API keys can access group endpoints and GET /api/me only. Use the website to manage your account.");
+    }
+    if (c.req.method !== "GET" && session.apiKey?.scope !== "WRITE") {
+      throw new ApiError("FORBIDDEN", "This API key has read-only access.");
+    }
+    // Mutations are limited by their existing route; add the same budget to API reads.
+    if (c.req.method === "GET") await enforceLimit(c.env.RL_MUTATION, `principal:${session.principal.id}`);
+  }
+  await next();
+};
+
+/** Cookie mutations need same-origin Origin. A validated API key supplies explicit credentials. */
 export const originGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
-  if (MUTATING.has(c.req.method) && !isAllowedOrigin(c.env, c.req.header("origin"))) {
+  if (MUTATING.has(c.req.method) && !c.get("session")?.apiKey && !isAllowedOrigin(c.env, c.req.header("origin"))) {
     throw new ApiError("FORBIDDEN", "Cross-site request blocked.");
   }
   await next();
