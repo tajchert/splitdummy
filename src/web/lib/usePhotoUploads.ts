@@ -3,7 +3,7 @@ import { MAX_ATTACHMENTS_PER_ENTRY } from "@shared/api";
 import { useApi } from "../api/context";
 import { errorMessage } from "../api/errors";
 import { newKey } from "../api/idempotency";
-import { compressReceipt } from "./receiptImage";
+import { compressReceipt, ImageReadError } from "./receiptImage";
 
 export type TileStatus = "compressing" | "uploading" | "done" | "failed";
 
@@ -16,6 +16,8 @@ export interface PhotoTile {
   error: string | null;
   /** Only tiles with a local file can be retried. */
   canRetry: boolean;
+  /** Informational only (the preview didn't load); never blocks saving. */
+  notice: string | null;
 }
 
 interface Local {
@@ -28,10 +30,11 @@ interface Local {
 
 export interface PhotoUploads {
   tiles: PhotoTile[];
-  add(files: File[]): void;
+  /** Returns how many files were skipped for lack of room. */
+  add(files: File[]): number;
   remove(key: string): void;
   retry(key: string): void;
-  /** The server image didn't load (e.g. an expired upload in an old draft). */
+  /** The preview didn't load: note it on the tile, but keep the photo and don't block saving. */
   markBroken(key: string): void;
   /** A save was rejected for the photo at this position of the saved id list. */
   markFailedAt(index: number, message: string): void;
@@ -48,7 +51,7 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
   const api = useApi();
   const local = useRef(new Map<string, Local>());
   const savedTiles = useCallback(
-    (ids: string[]): PhotoTile[] => ids.map((id) => ({ key: id, id, src: api.attachmentUrl(projectId, id), status: "done", error: null, canRetry: false })),
+    (ids: string[]): PhotoTile[] => ids.map((id) => ({ key: id, id, src: api.attachmentUrl(projectId, id), status: "done", error: null, canRetry: false, notice: null })),
     [api, projectId],
   );
   const [tiles, setTiles] = useState<PhotoTile[]>(() => savedTiles(initialIds));
@@ -62,6 +65,7 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
         if (!item.compressed) {
           patch(key, { status: "compressing", error: null });
           item.compressed = (await compressReceipt(item.file)).blob;
+          if (!local.current.has(key)) return;
           if (item.objectUrl) URL.revokeObjectURL(item.objectUrl);
           item.objectUrl = URL.createObjectURL(item.compressed);
           patch(key, { src: item.objectUrl });
@@ -70,7 +74,10 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
         const dto = await api.uploadAttachment(projectId, item.compressed, { idempotencyKey: item.idempotencyKey });
         if (local.current.has(key)) patch(key, { status: "done", id: dto.id });
       } catch (err) {
-        if (local.current.has(key)) patch(key, { status: "failed", error: errorMessage(err) });
+        if (!local.current.has(key)) return;
+        // An unreadable file fails the same way every time, so it can only be removed.
+        const unreadable = err instanceof ImageReadError;
+        patch(key, { status: "failed", error: unreadable ? err.message : errorMessage(err), canRetry: !unreadable });
       }
     },
     [api, projectId, patch],
@@ -83,15 +90,16 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
 
   const add = useCallback(
     (files: File[]) => {
-      const room = MAX_ATTACHMENTS_PER_ENTRY - current.current.length;
-      const added: PhotoTile[] = files.slice(0, Math.max(0, room)).map((file) => {
+      const room = Math.max(0, MAX_ATTACHMENTS_PER_ENTRY - current.current.length);
+      const added: PhotoTile[] = files.slice(0, room).map((file) => {
         const key = newKey();
         const objectUrl = URL.createObjectURL(file);
         local.current.set(key, { file, idempotencyKey: newKey(), objectUrl });
-        return { key, id: null, src: objectUrl, status: "compressing", error: null, canRetry: true };
+        return { key, id: null, src: objectUrl, status: "compressing", error: null, canRetry: true, notice: null };
       });
       setTiles((ts) => [...ts, ...added]);
       for (const t of added) void process(t.key);
+      return files.length - added.length;
     },
     [process],
   );
@@ -104,7 +112,7 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
   }, []);
 
   const retry = useCallback((key: string) => void process(key), [process]);
-  const markBroken = useCallback((key: string) => patch(key, { status: "failed", error: "This photo is no longer available.", canRetry: false }), [patch]);
+  const markBroken = useCallback((key: string) => patch(key, { notice: "This photo is no longer available.", canRetry: false }), [patch]);
   const markFailedAt = useCallback(
     (index: number, message: string) => setTiles((ts) => {
       const target = ts.filter((t) => t.status === "done")[index];
@@ -134,6 +142,8 @@ export function usePhotoUploads({ projectId, initialIds, onIdsChange }: { projec
 
   useEffect(() => () => {
     for (const item of local.current.values()) if (item.objectUrl) URL.revokeObjectURL(item.objectUrl);
+    // Late results from uploads still in flight are dropped (process checks membership).
+    local.current.clear();
   }, []);
 
   return {

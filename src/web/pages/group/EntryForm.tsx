@@ -142,7 +142,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
         return;
       }
       if (err.code === "ROUND_NOT_COLLECTING") {
-        const keep = { ...d, rejected: true, roundSequence: round.sequence + 1 };
+        const keep = { ...d, attachmentIds: photos.ids, rejected: true, roundSequence: round.sequence + 1 };
         saveDraft(view.project.id, entry ? "new-EXPENSE" : slot, keep);
         if (entry) clearDraft(view.project.id, slot);
         setD(keep);
@@ -313,7 +313,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
 
         <SplitEditor d={d} ev={ev} view={view} errors={errors} update={update} ctx={ctx} />
 
-        <NoteAndPhotos note={d.note} onNote={(note) => update({ note })} noteError={errors.note} photos={photos} photosError={errors.photos} />
+        <NoteAndPhotos note={d.note} onNote={(note) => update({ note })} noteError={errors.note} photos={photos} photosError={errors.photos} disabled={pending} />
 
         <details className="ef-advanced" open={advancedOpen}>
           <summary>
