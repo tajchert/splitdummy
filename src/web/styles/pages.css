@@ -2132,7 +2132,7 @@
 .api-docs { max-width: 800px; }
 .api-docs .card { margin-top: 20px; }
 .api-docs p { line-height: 1.65; }
-.api-doc-links, .api-key-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.api-key-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
 .api-code { min-width: 0; margin: 18px 0; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface2); overflow: hidden; }
 .api-code-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .api-code pre { margin: 0; padding: 16px; overflow-x: auto; font-size: 12px; line-height: 1.7; tab-size: 4; }

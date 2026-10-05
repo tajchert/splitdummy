@@ -65,6 +65,7 @@ export function apiGuide(origin: string): string {
   return `# Splitdummy API
 
 Use your groups from scripts and AI tools. Base URL: ${origin}
+This guide (Markdown, for AI tools): ${origin}/docs/api.md
 Human guide: ${origin}/docs/api
 OpenAPI 3.1 schema: ${origin}/api/openapi.json
 
@@ -126,7 +127,7 @@ Errors are JSON: {"error":{"code":"VALIDATION","message":"...","field":"original
 
 ## AI tools
 Import ${origin}/api/openapi.json into an OpenAPI-compatible tool and configure bearer authentication with your key.
-For clients that need text, use ${origin}/api/docs. Start with a read-only key for summaries and balances.
+For clients that need text, use ${origin}/docs/api.md. Start with a read-only key for summaries and balances.
 For write tools, look up current group/member/round IDs rather than guessing. Ask the user to confirm expenses, participants and payment confirmations before submitting.
 Keep the key in the tool's secret configuration or environment, outside prompts and shared chats.
 `;

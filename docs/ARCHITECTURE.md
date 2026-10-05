@@ -29,7 +29,7 @@ Users create and revoke personal keys in Account. Keys are shown once, stored as
 `Authorization: Bearer sd_…` authenticates the existing group endpoints and `GET /api/me`; ProjectDO remains the membership/role authority. The public allowlist is in `src/shared/public-api.ts`.
 Bearer authentication and scope checks run before the origin guard. Only validated keys bypass cookie CSRF checks; account/auth/key-management routes and WebSockets remain unavailable to keys.
 Key creation is intentionally not automatically retried because the secret cannot be replayed. Group mutations retain existing idempotency and version checks.
-Public user docs: `/docs/api`; machine-readable guide: `/api/docs`; OpenAPI 3.1 schema: `/api/openapi.json` (request schemas generated from the existing Zod contracts).
+Public user docs: `/docs/api`; guide for AI tools (Markdown): `/docs/api.md` (`/api/docs` redirects there); OpenAPI 3.1 schema: `/api/openapi.json` (request schemas generated from the existing Zod contracts).
 
 ## Contracts
 

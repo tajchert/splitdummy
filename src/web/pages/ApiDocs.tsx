@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { apiExamples } from "@shared/api-guide";
 import { AppBar, useTitle } from "../components/Shell";
 import { useToast } from "../components/Toast";
+import { Banner } from "../components/ui";
 
 function Code({ text, label }: { text: string; label: string }) {
   const toast = useToast();
@@ -24,13 +25,19 @@ export function ApiDocs() {
     <main id="main" className="page api-docs">
       <h1 className="page-h1">API for scripts and AI tools</h1>
       <p className="lede muted">Read balances, add expenses, and work with your groups using a simple HTTP API.</p>
-      <p className="api-doc-links"><a href="/api/openapi.json">OpenAPI schema</a><a href="/api/docs">Plain-text guide for AI tools</a></p>
+      <Banner tone="blue" icon="info">
+        <b>Using an LLM or AI tool?</b>
+        <p>
+          Point it at <a href="/docs/api.md">/docs/api.md</a> or import <a href="/api/openapi.json">/api/openapi.json</a>, then give it your key as a Bearer token.
+          Start with a read-only key, and keep the key in the tool’s secret settings, not in prompts.
+        </p>
+      </Banner>
 
       <section className="card">
         <h2 className="card-title">1. Create a key</h2>
         <p>Sign in with your email, open <Link to="/account">Account → API keys</Link>, and choose an access level.</p>
         <p><strong>Read only</strong> works for summaries, balances and exports. <strong>Read and write</strong> also lets scripts change your groups, subject to your group role.</p>
-        <p className="small muted">Copy the key when it appears: it’s shown once. Keys expire after 90 days; revoke them anytime in Account.</p>
+        <p className="small muted">Copy the key when it appears: it’s shown once. Keys expire after 90 days; revoke them anytime in Account. Keys can’t change account access or manage keys, and joining groups happens on the website.</p>
       </section>
 
       <section className="card">
@@ -65,13 +72,6 @@ export function ApiDocs() {
           <li><strong>Currencies:</strong> <code>IDENTITY</code> is for the base currency. Foreign currencies need multi-currency enabled and a manual rate or actual base amount.</li>
           <li><strong>Rounds:</strong> add and edit expenses while <code>COLLECTING</code>. Payment actions record transfers made outside Splitdummy.</li>
         </ul>
-      </section>
-
-      <section className="card">
-        <h2 className="card-title">Using an LLM or AI tool</h2>
-        <p>Import the <a href="/api/openapi.json">endpoint schema</a> into a tool that supports OpenAPI and configure Bearer authentication with your key. Use the <a href="/api/docs">plain-text guide</a> for clients that need text instructions.</p>
-        <p>Start with read-only access for summaries. For writes, have the tool fetch current IDs and confirm the expense, participants or payment action with you before submitting.</p>
-        <p className="small muted">Keep keys in your tool’s secret configuration or environment, outside prompts and shared chats. Join groups and manage your account on the website; API keys cannot change account access or manage keys.</p>
       </section>
 
       <section className="card">

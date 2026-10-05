@@ -172,11 +172,19 @@ it("publishes an unauthenticated OpenAPI schema with bearer security and real ex
   expect(doc.paths).not.toHaveProperty("/api/me/api-keys");
 });
 
-it("serves the guide to text-only clients without authentication", async () => {
-  const res = await call("/api/docs");
+it("serves the guide to AI tools as Markdown at /docs/api.md without authentication", async () => {
+  const res = await call("/docs/api.md");
   expect(res.status).toBe(200);
-  expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+  expect(res.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
   const guide = await res.text();
   expect(guide).toContain("http://localhost/api/openapi.json");
+  expect(guide).toContain("http://localhost/docs/api.md");
+  expect(guide).not.toContain("/api/docs");
   expect(guide).toContain("Authorization: Bearer");
+});
+
+it("permanently redirects the old guide URL /api/docs to /docs/api.md", async () => {
+  const res = await call("/api/docs");
+  expect(res.status).toBe(301);
+  expect(res.headers.get("location")).toBe("/docs/api.md");
 });

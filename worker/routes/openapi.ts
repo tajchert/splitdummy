@@ -126,7 +126,7 @@ export function openApiDocument(origin: string) {
     };
   }
   return { openapi: "3.1.0", info: { title: "Splitdummy API", version: "1.0.0",
-    description: "Use your groups from scripts and AI tools. Create a personal API key in Account on the website. Keys expire after 90 days and can be revoked immediately. Amounts are integer minor-unit strings. See /docs/api for examples." },
+    description: "Use your groups from scripts and AI tools. Create a personal API key in Account on the website. Keys expire after 90 days and can be revoked immediately. Amounts are integer minor-unit strings. Examples: /docs/api (people) and /docs/api.md (AI tools)." },
     servers: [{ url: origin }], paths,
     components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "Personal API key",
       description: "Create a key in Account → API keys. Use Authorization: Bearer sd_…" } } } };
@@ -134,7 +134,12 @@ export function openApiDocument(origin: string) {
 
 export const openApiRoutes = new Hono<AppEnv>();
 openApiRoutes.get("/api/openapi.json", (c) => c.json(openApiDocument(c.env.APP_ORIGIN)));
-openApiRoutes.get("/api/docs", (c) => {
-  c.header("Content-Type", "text/plain; charset=utf-8");
+/** The guide for AI tools and text-only clients (Markdown). Lives next to the human page /docs/api. */
+export const API_GUIDE_PATH = "/docs/api.md";
+
+openApiRoutes.get(API_GUIDE_PATH, (c) => {
+  c.header("Content-Type", "text/markdown; charset=utf-8");
   return c.body(apiGuide(c.env.APP_ORIGIN));
 });
+// Former guide URL; kept so existing agents and bookmarks keep working.
+openApiRoutes.get("/api/docs", (c) => c.redirect(API_GUIDE_PATH, 301));

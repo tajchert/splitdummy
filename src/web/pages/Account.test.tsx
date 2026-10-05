@@ -120,7 +120,19 @@ describe("API keys", () => {
     await api.signOut({ idempotencyKey: crypto.randomUUID() });
     renderAt(api, "/docs/api");
     expect(await screen.findByRole("heading", { name: "API for scripts and AI tools" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "OpenAPI schema" }).getAttribute("href")).toBe("/api/openapi.json");
+    expect(screen.getByRole("link", { name: "/api/openapi.json" }).getAttribute("href")).toBe("/api/openapi.json");
+  });
+
+  it("opens the API docs with a brief LLM / AI tool note that points to /docs/api.md", async () => {
+    renderAt(createMockApi(), "/docs/api");
+    const note = await screen.findByText("Using an LLM or AI tool?");
+    const box = note.closest(".banner") as HTMLElement;
+    expect(within(box).getByRole("link", { name: "/docs/api.md" }).getAttribute("href")).toBe("/docs/api.md");
+    // It comes first: before the numbered steps, and the old bottom section is gone.
+    const first = screen.getByRole("heading", { name: "1. Create a key" });
+    expect(box.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Using an LLM or AI tool" })).toBeNull();
+    expect(document.querySelector('a[href="/api/docs"]')).toBeNull();
   });
 
   it("refreshes keys and clears the secret when a committed revoke loses its response", async () => {
