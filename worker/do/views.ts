@@ -266,12 +266,12 @@ export function snapshotBalances(balances: MemberBalance[]): SnapshotData["balan
   return balances.map(memberBalanceJson);
 }
 
-/** Members expected to mark readiness: currently ACTIVE members whose account still exists. */
+/** Members expected to mark readiness: currently ACTIVE people (not placeholders) whose account still exists. */
 export function readinessList(store: Store, roundId: string): ReadinessDTO[] {
   const rows = new Map(store.readiness(roundId).map((r) => [r.member_id, r]));
   return store
     .members()
-    .filter((m) => m.status === "ACTIVE" && m.account_deleted !== 1)
+    .filter((m) => m.status === "ACTIVE" && m.account_deleted !== 1 && m.kind !== "PLACEHOLDER")
     .map((m) => {
       const r = rows.get(m.id);
       return { memberId: m.id, ready: r?.ready === 1, markedAt: r?.marked_at ?? null };

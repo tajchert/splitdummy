@@ -152,6 +152,16 @@ export function updateSettings(tx: Tx, req: DoRequest): OpResult {
     tx.clearReadiness("ALL");
   }
 
+  const canRename = project.members_can_rename === 1;
+  if (body.membersCanRename !== undefined && body.membersCanRename !== canRename) {
+    tx.store.run("UPDATE project SET members_can_rename = ? WHERE id = ?", body.membersCanRename ? 1 : 0, project.id);
+    tx.audit(
+      "MEMBER_RENAME_POLICY_CHANGED",
+      body.membersCanRename ? "Let members change their own names" : "Only the owner can change names now",
+      { entityId: project.id, details: { membersCanRename: body.membersCanRename } },
+    );
+  }
+
   return projectResult(tx);
 }
 
@@ -398,6 +408,9 @@ export function leave(tx: Tx): DoResponse {
 /** Own display name in this group. Identity, not money: allowed in any round state; names may repeat. */
 export function renameMe(tx: Tx, req: DoRequest): OpResult {
   const me = tx.member();
+  if (tx.project.members_can_rename !== 1 && tx.project.owner_member_id !== me.id) {
+    throw forbidden("The owner manages names in this group.");
+  }
   const body = parseBody(RenameMemberSchema, req.body);
   if (body.displayName !== me.display_name) {
     tx.store.run("UPDATE members SET display_name = ? WHERE id = ?", body.displayName, me.id);

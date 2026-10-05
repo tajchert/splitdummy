@@ -11,6 +11,7 @@ import type { LiveMessage } from "@shared/api";
 import { ApiError, invalid, unauthenticated } from "./errors";
 import { accountDeletionInfo, anonymizeMember, deletionPrincipals } from "./ops/account";
 import { acceptOwnership, createInvite, createProject, deleteRate, join, leave, previewInvite, principalUpdated, putRate, removeMember, renameMe, revokeInvite, transferOwnership, updateSettings, type OpResult } from "./ops/project";
+import { addMember, renameMember } from "./ops/members";
 import { createAdjustment, createEntry, deleteEntry, setReadiness, updateEntry } from "./ops/ledger";
 import { backupSnapshot, exportCsv, getHistory, getProject, getReview, getRound } from "./ops/read";
 import { freeze, markDisputed, markReceived, markSent, scheduledFreeze, setFreezeSchedule, startRound } from "./ops/settlement";
@@ -163,7 +164,7 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
 
   /** Async work that must finish before the synchronous transaction starts. */
   private async prepare(req: DoRequest): Promise<Prepared> {
-    if (req.op === "createInvite") {
+    if (req.op === "createInvite" || req.op === "addMember" || req.op === "inviteMember") {
       const secret = randomSecret();
       return { secret, secretHash: await sha256Hex(secret) };
     }
@@ -234,7 +235,9 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
       case "principalUpdated":
         return principalUpdated(tx, req);
       case "addMember":
+        return addMember(tx, req, { secret: prepared.secret!, secretHash: prepared.secretHash! }, this.env.APP_ORIGIN);
       case "renameMember":
+        return renameMember(tx, req);
       case "inviteMember":
       case "cancelMemberInvite":
       case "previewMemberInvite":
