@@ -13,6 +13,7 @@ import { memberRoutes } from "./routes/members";
 import { liveRoutes } from "./routes/live";
 import { projectRoutes } from "./routes/projects";
 import { apiKeyRoutes } from "./routes/api-keys";
+import { clientErrorRoutes } from "./routes/client-errors";
 import { openApiRoutes } from "./routes/openapi";
 
 export { ProjectDO } from "./do/ProjectDO";
@@ -41,6 +42,7 @@ app.route("/", liveRoutes);
 app.route("/", invitationRoutes);
 app.route("/", memberRoutes);
 app.route("/", projectRoutes);
+app.route("/", clientErrorRoutes);
 
 // Hashed build files. A stale tab asking for a chunk from a previous deploy must get a 404 (the client
 // then reloads), not the SPA's index.html served as JavaScript.
