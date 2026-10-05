@@ -27,7 +27,7 @@ export function Invite() {
   // Emailed links carry the token in the fragment (/invite#<token>) so it never hits server logs.
   const token = params.token ?? tokenFromHash(hash);
   const api = useApi();
-  const { refresh } = useSession();
+  const { refresh, me } = useSession();
   const navigate = useNavigate();
   const toast = useToast();
   const { run, pending } = useSubmit();
@@ -142,6 +142,11 @@ export function Invite() {
                 {pending ? "Joining…" : "Join"}
               </button>
               <p className="tiny muted">Joining signs you in with the email this invitation was sent to.</p>
+              {me && (
+                <p className="tiny muted">
+                  You're signed in as {me.email ?? "a guest"}. Joining switches this browser to the invited email's account.
+                </p>
+              )}
             </form>
           </>
         )}

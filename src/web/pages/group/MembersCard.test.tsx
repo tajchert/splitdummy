@@ -67,6 +67,17 @@ describe("members card", () => {
     await waitFor(() => expect(cancel).toHaveBeenCalledWith("p_porto", "m_nina", expect.anything()));
   });
 
+  it("tells the owner when a resend's email could not be sent", async () => {
+    const api = mockAs("pr_lea");
+    const real = api.inviteMember.bind(api);
+    vi.spyOn(api, "inviteMember").mockImplementation(async (pid, memberId, body, o) => ({ ...(await real(pid, memberId, body, o)), emailSent: false }));
+    renderAt(api, "/g/p_porto/settings");
+    fireEvent.click(await screen.findByRole("button", { name: "Manage Nina" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Resend" }));
+    expect(await screen.findByText("Couldn't send the email to nina@example.com. Try Resend.")).toBeTruthy();
+  });
+
   it("locking self-renaming makes 'Your name' read-only for members", async () => {
     const owner = mockAs("pr_lea");
     renderAt(owner, "/g/p_porto/settings");

@@ -127,6 +127,29 @@ describe("email invites", () => {
     expect(res.transient).toEqual({ invitedEmail: "z@example.com" });
   });
 
+  it("previews alreadyMember only for the viewer who claimed this invite", async () => {
+    const g = await createGroup({ members: 0 });
+    const { token } = await invite(g, "Zoe", "z@example.com");
+    const asOwner = await g.owner.ok<MemberInvitePreviewDTO>("previewMemberInvite", { tokenSecret: token }, null, null);
+    expect(asOwner.status).toBe("OPEN");
+    expect(asOwner.alreadyMemberProjectId).toBeNull();
+    const zoe = new Client(g.stub, g.projectId, accountFor("z@example.com"));
+    await zoe.ok("acceptMemberInvite", { tokenSecret: token }, {});
+    const after = await zoe.ok<MemberInvitePreviewDTO>("previewMemberInvite", { tokenSecret: token }, null, null);
+    expect(after.alreadyMemberProjectId).toBe(g.projectId);
+  });
+
+  it("tells a LEFT member to ask for the group link", async () => {
+    const g = await createGroup({ members: 1 });
+    const { token } = await invite(g, "Zoe", "z@example.com");
+    const bob = g.members[0]!;
+    await bob.ok("leave");
+    const bobAsZoe = new Client(g.stub, g.projectId, { ...bob.principal!, email: "z@example.com" });
+    const res = await bobAsZoe.call("acceptMemberInvite", { tokenSecret: token }, {});
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ error: { code: "ALREADY_MEMBER", message: expect.stringContaining("You left this group as") } });
+  });
+
   it("accept claims the placeholder, keeping its id, entries and balance", async () => {
     const g = await createGroup({ members: 0 });
     const { member, token } = await invite(g, "Zoe", "z@example.com");

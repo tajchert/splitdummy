@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import type { EntryDTO, InstructionDTO, ProjectViewDTO, RoundViewDTO } from "@shared/api";
+import type { EntryDTO, InstructionDTO, MemberDTO, ProjectViewDTO, RoundViewDTO } from "@shared/api";
 import { useApi } from "../../api/context";
 import { errorMessage } from "../../api/errors";
 import { useSubmit } from "../../api/idempotency";
@@ -30,6 +30,16 @@ export function groupBase(projectId: string) {
   return `/g/${encodeURIComponent(projectId)}`;
 }
 
+/** Small chip marking a placeholder (or invited) member; nothing for real people. */
+export function PlaceholderTag({ member, hidden }: { member: MemberDTO | undefined; hidden?: boolean }) {
+  if (member?.kind !== "PLACEHOLDER") return null;
+  return (
+    <span className="chip-sm" {...(hidden ? { "aria-hidden": true } : {})}>
+      {member.inviteState === "INVITED" ? "invited" : "placeholder"}
+    </span>
+  );
+}
+
 /** A member's name; deleted accounts render muted. */
 export function Who({ view, id, you }: { view: ProjectViewDTO; id: string | null | undefined; you?: boolean }) {
   const name = nameOf(view, id, { you });
@@ -38,7 +48,7 @@ export function Who({ view, id, you }: { view: ProjectViewDTO; id: string | null
   if (m?.kind === "PLACEHOLDER")
     return (
       <>
-        {name} <span className="chip-sm">{m.inviteState === "INVITED" ? "invited" : "placeholder"}</span>
+        {name} <PlaceholderTag member={m} />
       </>
     );
   return <>{name}</>;

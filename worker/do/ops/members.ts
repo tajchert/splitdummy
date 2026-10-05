@@ -154,7 +154,8 @@ export function previewMemberInvite(tx: Tx, prepared: { secretHash: string }): D
     displayName: m.display_name,
     status: memberInviteStatus(tx, m),
     canRename: project.members_can_rename === 1,
-    alreadyMemberProjectId: mine && mine.status === "ACTIVE" ? project.id : null,
+    // Only the claimer of THIS invite counts: accepting acts as the invited email's account, not the viewer's.
+    alreadyMemberProjectId: mine && mine.id === m.id && mine.status === "ACTIVE" ? project.id : null,
   };
   return { status: 200, body, ...(m.invited_email !== null ? { transient: { invitedEmail: m.invited_email } } : {}) };
 }
@@ -210,7 +211,11 @@ export function acceptMemberInvite(tx: Tx, req: DoRequest, prepared: { secretHas
   if (principal.email !== m.invited_email) throw forbidden("This invitation is for a different email address.");
   const mine = tx.store.memberByPrincipal(principal.principalId);
   if (mine && mine.status !== "REMOVED") {
-    throw conflict("ALREADY_MEMBER", `You're already in this group as ${mine.display_name}.`, { memberId: mine.id });
+    const message =
+      mine.status === "LEFT"
+        ? `You left this group as ${mine.display_name}. Ask the owner for the group link to rejoin.`
+        : `You're already in this group as ${mine.display_name}.`;
+    throw conflict("ALREADY_MEMBER", message, { memberId: mine.id });
   }
   claimPlaceholder(tx, m, principal, body.displayName);
   const result: JoinResultDTO = { projectId: tx.project.id, memberId: m.id };

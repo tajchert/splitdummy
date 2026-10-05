@@ -46,6 +46,13 @@ describe("accept email invite", () => {
     expect(await screen.findByText("Porto weekend")).toBeTruthy();
   });
 
+  it("a signed-in browser still gets Join, with a note about switching accounts", async () => {
+    renderAt(mockAs("pr_lea"), "/invite/p_porto.demo-member-invite-0001");
+    expect(await screen.findByRole("button", { name: "Join" })).toBeTruthy();
+    expect(screen.getByText(/You're signed in as .*Joining switches this browser to the invited email's account\./)).toBeTruthy();
+    expect(screen.queryByText("You're already in")).toBeNull();
+  });
+
   it("unknown links explain what happened", async () => {
     renderAt(mockAs(null), "/invite/p_porto.nope-nope-nope-nope");
     expect(await screen.findByText("This invitation isn't available")).toBeTruthy();

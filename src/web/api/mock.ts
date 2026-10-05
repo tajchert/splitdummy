@@ -1194,7 +1194,7 @@ export function createMockApi(): MockApi {
         const entry = Object.entries(p?.memberInvites ?? {}).find(([, v]) => v.token === token);
         const m = entry && p ? ph(p, entry[0]) : undefined;
         if (!p || !m) fail(404, "INVITE_INVALID", "This invitation link isn't valid anymore. Ask the owner to send a new one.");
-        const already = state.me ? p.members.find((x) => p.principals[x.id] === state.me && x.status === "ACTIVE") : undefined;
+        const already = state.me && p.principals[m.id] === state.me && m.status === "ACTIVE" ? m : undefined;
         const expired = new Date(m.inviteExpiresAt ?? 0).getTime() < Date.now();
         const status = entry![1].claimed ? "CLAIMED" : expired ? "EXPIRED" : "OPEN";
         return { projectName: p.project.name, baseCurrency: p.project.baseCurrency, displayName: m.displayName, status, canRename: p.project.membersCanRename, alreadyMemberProjectId: already ? p.project.id : null };

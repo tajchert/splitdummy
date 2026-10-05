@@ -82,7 +82,7 @@ export function MembersCard({ view }: { view: ProjectViewDTO }) {
               </div>
               {owner && x.invitedEmail && <div className="tiny muted">{x.invitedEmail}</div>}
             </div>
-            {owner && !x.isOwner && (
+            {owner && !x.isOwner && !x.accountDeleted && (
               <button type="button" className="btn btn-ghost btn-sm" aria-label={`Manage ${x.displayName}`} onClick={() => setManaging(x)}>
                 Manage
               </button>
@@ -232,6 +232,7 @@ function AddPersonSheet({ view, onClose }: { view: ProjectViewDTO; onClose: () =
 function ManageMemberSheet({ view, member, onClose, onRemove }: { view: ProjectViewDTO; member: MemberDTO; onClose: () => void; onRemove: () => void }) {
   const api = useApi();
   const m = useMutation();
+  const toast = useToast();
   const [name, setName] = useState(member.displayName);
   const [email, setEmail] = useState(member.invitedEmail ?? "");
   const pid = view.project.id;
@@ -264,7 +265,16 @@ function ManageMemberSheet({ view, member, onClose, onRemove }: { view: ProjectV
             onSubmit={(e) => {
               e.preventDefault();
               const body = { email: email.trim() };
-              void m.run(body, (k) => api.inviteMember(pid, member.id, body, { idempotencyKey: k }), `Invitation sent to ${body.email}`);
+              const out: { result?: AddMemberResultDTO } = {};
+              void m
+                .run(body, async (k) => (out.result = await api.inviteMember(pid, member.id, body, { idempotencyKey: k })))
+                .then((ok) => {
+                  if (!ok) return;
+                  // emailSent is null on a replay: don't claim a send.
+                  if (out.result?.emailSent === true) toast(`Invitation sent to ${body.email}`);
+                  else if (out.result?.emailSent === false) toast(`Couldn't send the email to ${body.email}. Try Resend.`, "info");
+                  else toast("Invitation updated");
+                });
             }}
           >
             <Field label="Invite by email" className="grow">
