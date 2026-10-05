@@ -269,57 +269,6 @@
   padding: 16px;
   border-radius: var(--r-lg);
 }
-.landing-invite-d {
-  display: none;
-}
-.invite-card {
-  gap: 10px;
-  border-radius: 18px;
-  padding: 16px;
-}
-.invite-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.invite-go {
-  padding: 0 14px;
-  min-height: 48px;
-  border-radius: var(--r-md);
-  flex: none;
-}
-.invite-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-width: 460px;
-}
-.invite-inline .invite-row {
-  padding: 8px 8px 8px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-}
-.invite-inline .invite-go {
-  min-height: 34px;
-  padding: 7px 12px;
-  border-radius: var(--r-sm);
-}
-.invite-bare {
-  flex: 1;
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-  min-width: 0;
-  padding: 6px 0;
-}
-.invite-bare:focus {
-  outline: none;
-}
-.invite-inline .invite-row:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
 .landing-steps {
   display: flex;
   flex-direction: column;
@@ -404,12 +353,8 @@
     padding: 16px 26px;
     border-radius: 14px;
   }
-  .landing-invite-m,
   .landing-steps {
     display: none;
-  }
-  .landing-invite-d {
-    display: block;
   }
   .landing-demo {
     display: flex;

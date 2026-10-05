@@ -1,68 +1,7 @@
-import { useId, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { useSession } from "../api/context";
 import { useTitle, UserChip } from "../components/Shell";
 import { FinishTrack, Icon, Logo } from "../components/ui";
-
-/** Accepts a full invitation URL (/join#token or /join/token), or the bare token. */
-export function inviteTokenFrom(input: string): string | null {
-  const s = input.trim();
-  if (!s) return null;
-  const m = s.match(/\/join(?:\/|#)([^/?#\s]+)/);
-  if (m) return decodeURIComponent(m[1]!);
-  if (/^[A-Za-z0-9_.-]{16,200}$/.test(s)) return s;
-  return null;
-}
-
-function InviteBox({ compact }: { compact?: boolean }) {
-  const navigate = useNavigate();
-  const [value, setValue] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const id = useId();
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const t = inviteTokenFrom(value);
-    if (!t) {
-      setError("That doesn't look like an invitation link. Paste the whole link you were sent.");
-      return;
-    }
-    navigate({ pathname: "/join", hash: encodeURIComponent(t) });
-  };
-  return (
-    <form className={compact ? "invite-inline" : "card invite-card"} onSubmit={submit} noValidate>
-      {!compact && (
-        <label htmlFor={id} className="field-label">
-          Got an invitation link?
-        </label>
-      )}
-      <div className="invite-row">
-        {compact && <Icon name="link" size={20} className="muted" />}
-        <input
-          id={id}
-          className={compact ? "invite-bare" : "input"}
-          placeholder={compact ? "Paste a link or code" : "Paste link or code"}
-          aria-label={compact ? "Invitation link or code" : undefined}
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setError(null);
-          }}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${id}-err` : undefined}
-          autoComplete="off"
-        />
-        <button type="submit" className="btn btn-ink invite-go" aria-label="Open invitation">
-          <Icon name="arrow_forward" size={compact ? 18 : 20} />
-        </button>
-      </div>
-      {error && (
-        <span id={`${id}-err`} className="field-error">
-          {error}
-        </span>
-      )}
-    </form>
-  );
-}
 
 export function Landing() {
   useTitle("Split the costs. Know when you're done.");
@@ -117,12 +56,6 @@ export function Landing() {
                 <span className="landing-lede-d">Sign in</span>
               </Link>
             )}
-          </div>
-          <div className="landing-invite-m">
-            <InviteBox />
-          </div>
-          <div className="landing-invite-d">
-            <InviteBox compact />
           </div>
           <div className="landing-steps">
             <div className="track track-landing" aria-hidden="true">
