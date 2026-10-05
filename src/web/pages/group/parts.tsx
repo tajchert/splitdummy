@@ -14,6 +14,7 @@ import {
   balanceOf,
   confirmedCount,
   isDeleted,
+  member,
   nameOf,
   notReadyAtFreeze,
   readinessOf,
@@ -32,7 +33,15 @@ export function groupBase(projectId: string) {
 /** A member's name; deleted accounts render muted. */
 export function Who({ view, id, you }: { view: ProjectViewDTO; id: string | null | undefined; you?: boolean }) {
   const name = nameOf(view, id, { you });
-  return isDeleted(view, id) ? <span className="member-deleted">{name}</span> : <>{name}</>;
+  if (isDeleted(view, id)) return <span className="member-deleted">{name}</span>;
+  const m = member(view, id);
+  if (m?.kind === "PLACEHOLDER")
+    return (
+      <>
+        {name} <span className="chip-sm">{m.inviteState === "INVITED" ? "invited" : "placeholder"}</span>
+      </>
+    );
+  return <>{name}</>;
 }
 
 /* ---------- header ---------- */
@@ -464,8 +473,12 @@ export function TransferCard({ view, i }: { view: ProjectViewDTO; i: Instruction
 
 export function TaskCards({ view }: { view: ProjectViewDTO }) {
   const me = view.me.memberId;
+  // The owner stands in for placeholders, who have no account to act with.
+  const isPh = (id: string) => view.me.isOwner && member(view, id)?.kind === "PLACEHOLDER";
   const tasks = view.current.instructions.filter(
-    (i) => (i.toMemberId === me && i.state === "SENT") || (i.fromMemberId === me && (i.state === "PROPOSED" || i.state === "DISPUTED")),
+    (i) =>
+      ((i.toMemberId === me || isPh(i.toMemberId)) && i.state === "SENT") ||
+      ((i.fromMemberId === me || isPh(i.fromMemberId)) && (i.state === "PROPOSED" || i.state === "DISPUTED")),
   );
   const order = { SENT: 0, DISPUTED: 1, PROPOSED: 2, CONFIRMED: 3 } as const;
   tasks.sort((a, b) => order[a.state] - order[b.state]);
@@ -491,6 +504,9 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
   const amount = fmtMoney(i.amount, i.currency, i.exponent);
   const pid = view.project.id;
   const rid = i.roundId;
+  /** Null when this is your own task; otherwise the placeholder you're acting for. */
+  const forName = (id: string) => (id === me ? null : nameOf(view, id));
+  const forPrefix = (id: string) => (forName(id) ? `For ${forName(id)}: ` : "");
 
   const act = async (kind: "sent" | "received" | "dispute", body: { note?: string } = {}) => {
     setError(null);
@@ -513,9 +529,10 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
 
   let text: ReactNode;
   let actions: ReactNode;
-  if (i.toMemberId === me) {
+  if (i.toMemberId === me || (i.state === "SENT" && i.toMemberId !== i.fromMemberId && member(view, i.toMemberId)?.kind === "PLACEHOLDER")) {
     text = (
       <>
+        {forPrefix(i.toMemberId)}
         {nameOf(view, i.fromMemberId)} says they sent you <b className="amount">{amount}</b>
         {i.sentAt ? ` on ${fmtShortDate(i.sentAt)}` : ""}. Did you get it?
       </>
@@ -524,7 +541,7 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
       <div className="task-actions">
         <button type="button" className="btn btn-primary btn-md-tall" disabled={sub.pending} onClick={() => void act("received")}>
           <Icon name="check" size={18} />
-          Received
+          {forName(i.toMemberId) ? `Received (for ${forName(i.toMemberId)})` : "Received"}
         </button>
         <button type="button" className="btn btn-outline btn-md-tall" disabled={sub.pending} onClick={() => setDisputing(true)}>
           <Icon name="close" size={18} />
@@ -535,6 +552,7 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
   } else if (i.state === "DISPUTED") {
     text = (
       <>
+        {forPrefix(i.fromMemberId)}
         {nameOf(view, i.toMemberId)} hasn't received your <b className="amount">{amount}</b>
         {i.disputeNote ? `: “${i.disputeNote}”` : "."} Sort it out with them, then mark it sent again.
       </>
@@ -543,13 +561,14 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
       <div className="task-actions">
         <button type="button" className="btn btn-primary btn-md-tall" disabled={sub.pending} onClick={() => void act("sent")}>
           <Icon name="send" size={18} />
-          I've sent it again
+          {forName(i.fromMemberId) ? `Mark sent for ${forName(i.fromMemberId)}` : "I've sent it again"}
         </button>
       </div>
     );
   } else {
     text = (
       <>
+        {forPrefix(i.fromMemberId)}
         Send <b className="amount">{amount}</b> to {nameOf(view, i.toMemberId)}, outside the app, then mark it here.
       </>
     );
@@ -557,7 +576,7 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
       <div className="task-actions">
         <button type="button" className="btn btn-primary btn-md-tall" disabled={sub.pending} onClick={() => void act("sent")}>
           <Icon name="send" size={18} />
-          I've sent it
+          {forName(i.fromMemberId) ? `Mark sent for ${forName(i.fromMemberId)}` : "I've sent it"}
         </button>
       </div>
     );

@@ -1,21 +1,22 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import type { InvitationDTO, MemberDTO, ProjectViewDTO } from "@shared/api";
+import type { InvitationDTO, ProjectViewDTO } from "@shared/api";
 import { DisplayNameSchema, ProjectNameSchema } from "@shared/api";
 import { parseRate, rateToString } from "@shared/money";
 import { useApi } from "../../api/context";
-import { ApiError, errorMessage } from "../../api/errors";
+import { errorMessage } from "../../api/errors";
 import { useSubmit } from "../../api/idempotency";
 import { ConfirmDialog } from "../../components/Dialog";
 import { CurrencySelect, Field, Toggle } from "../../components/Field";
 import { BackButton, useTitle } from "../../components/Shell";
 import { useToast } from "../../components/Toast";
-import { Avatar, Banner, Icon } from "../../components/ui";
+import { Banner, Icon } from "../../components/ui";
 import { currencyName, decimalSeparator, fmtDate, fmtDateTime, fmtRate } from "../../lib/format";
 import { rateErrorText } from "../../lib/entryForm";
-import { activeMembers, nameOf, toneFor } from "../../lib/project";
+import { nameOf } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
 import { FreezeDateForm, freezeScheduleSentence } from "./FreezeDate";
+import { MembersCard, useMutation } from "./MembersCard";
 import { groupBase } from "./parts";
 
 export function Settings() {
@@ -46,7 +47,7 @@ export function Settings() {
       <CurrencySettings view={view} />
       {(view.project.multiCurrencyEnabled || view.rates.length > 0) && <RateDefaults view={view} />}
       {owner && <Invitations view={view} />}
-      <Members view={view} />
+      <MembersCard view={view} />
       {!owner && <LeaveGroup view={view} />}
       <Link to="/account" className="card link-card">
         <span className="meta-item ink">
@@ -59,32 +60,12 @@ export function Settings() {
   );
 }
 
-function useMutation() {
-  const { refresh } = useProject();
-  const toast = useToast();
-  const sub = useSubmit();
-  const [error, setError] = useState<string | null>(null);
-  const run = async (payload: unknown, fn: (k: string) => Promise<unknown>, success?: string) => {
-    setError(null);
-    try {
-      await sub.run(payload, fn);
-      await refresh();
-      if (success) toast(success);
-      return true;
-    } catch (e) {
-      setError(errorMessage(e));
-      if (e instanceof ApiError && (e.code === "STALE_VERSION" || e.status === 409)) void refresh();
-      return false;
-    }
-  };
-  return { run, pending: sub.pending, error, setError };
-}
-
-/** Any member can change their own name in this group; the change shows in History. */
+/** Members change their own name here unless the owner locked renaming; the change shows in History. */
 function YourName({ view }: { view: ProjectViewDTO }) {
   const api = useApi();
   const m = useMutation();
   const current = view.members.find((x) => x.id === view.me.memberId)?.displayName ?? "";
+  const locked = !view.project.membersCanRename && !view.me.isOwner;
   const [name, setName] = useState(current);
   const [fieldErr, setFieldErr] = useState<string | undefined>();
   const submit = async (e: FormEvent) => {
@@ -103,13 +84,25 @@ function YourName({ view }: { view: ProjectViewDTO }) {
       </h2>
       <div className="inline-form">
         <Field label="Name" error={fieldErr ?? m.error ?? undefined} className="grow">
-          {(p) => <input {...p} className="input" value={name} maxLength={40} autoComplete="nickname" onChange={(e) => (setName(e.target.value), setFieldErr(undefined))} />}
+          {(p) => (
+            <input
+              {...p}
+              className="input"
+              value={locked ? current : name}
+              maxLength={40}
+              autoComplete="nickname"
+              readOnly={locked}
+              onChange={(e) => (setName(e.target.value), setFieldErr(undefined))}
+            />
+          )}
         </Field>
-        <button type="submit" className="btn btn-secondary btn-md" disabled={m.pending || name.trim() === current || !name.trim()}>
-          Save
-        </button>
+        {!locked && (
+          <button type="submit" className="btn btn-secondary btn-md" disabled={m.pending || name.trim() === current || !name.trim()}>
+            Save
+          </button>
+        )}
       </div>
-      <p className="tiny muted">Everyone in the group sees it. The change is noted in History.</p>
+      <p className="tiny muted">{locked ? "The owner manages names in this group." : "Everyone in the group sees it. The change is noted in History."}</p>
     </form>
   );
 }
@@ -399,7 +392,9 @@ function Invitations({ view }: { view: ProjectViewDTO }) {
       <h2 id="s-inv" className="card-title">
         Invite people
       </h2>
-      <p className="small muted">Anyone with the link can join with their own name until it expires or you revoke it. They can't take over someone who's already in the group.</p>
+      <p className="small muted">
+        Anyone with the link can join after confirming their email. They can't take over someone who's already in the group. To invite a specific person, add them under Members.
+      </p>
       {settling && (
         <Banner tone="neutral" icon="lock">
           Joining is paused while settling
@@ -464,117 +459,6 @@ function Invitations({ view }: { view: ProjectViewDTO }) {
             );
           })}
         </ul>
-      )}
-    </section>
-  );
-}
-
-function Members({ view }: { view: ProjectViewDTO }) {
-  const api = useApi();
-  const m = useMutation();
-  const owner = view.me.isOwner;
-  const collecting = view.current.round.status === "COLLECTING";
-  const members = activeMembers(view);
-  const [removing, setRemoving] = useState<MemberDTO | null>(null);
-  const [transferTo, setTransferTo] = useState<string>("");
-  const [confirmTransfer, setConfirmTransfer] = useState(false);
-  const candidates = members.filter((x) => !x.isOwner && x.hasRecoverableAccount);
-
-  return (
-    <section className="card" aria-labelledby="s-mem">
-      <div className="card-head">
-        <h2 id="s-mem" className="card-title">
-          Members
-        </h2>
-        <span className="card-sub">{members.length}</span>
-      </div>
-      <ul className="plain-list">
-        {members.map((x) => (
-          <li key={x.id} className="row-plain member-row">
-            <Avatar name={x.displayName} tone={toneFor(view, x.id)} size={32} />
-            <div className="grow">
-              <span className="member-name">{nameOf(view, x.id, { you: true })}</span>
-              <div className="tiny muted">
-                {x.isOwner ? "Owner" : x.isGuest ? (x.hasRecoverableAccount ? "Guest with email" : "Guest") : "Member"} · joined {fmtDate(x.joinedAt)}
-              </div>
-            </div>
-            {owner && !x.isOwner && collecting && !x.referenced && (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRemoving(x)}>
-                Remove
-              </button>
-            )}
-            {owner && !x.isOwner && x.referenced && <span className="tiny muted member-lock">In entries</span>}
-          </li>
-        ))}
-      </ul>
-      {owner && (
-        <p className="tiny muted">
-          {collecting
-            ? "People who are part of any entry or repayment can't be removed, so balances stay correct."
-            : "Members are locked while settling."}
-        </p>
-      )}
-      {owner && collecting && (
-        <div className="dashed-top stack-8">
-          <h3 className="field-label">Transfer ownership</h3>
-          {candidates.length === 0 ? (
-            <p className="tiny muted">The new owner needs an account with a verified email. Nobody else in the group has one yet.</p>
-          ) : (
-            <div className="inline-form">
-              <span className="select-wrap grow">
-                <select className="input select" aria-label="New owner" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
-                  <option value="">Choose a member…</option>
-                  {candidates.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.displayName}
-                    </option>
-                  ))}
-                </select>
-                <Icon name="expand_more" size={18} className="select-chevron" />
-              </span>
-              <button type="button" className="btn btn-secondary btn-md" disabled={!transferTo} onClick={() => setConfirmTransfer(true)}>
-                Offer
-              </button>
-            </div>
-          )}
-          <p className="tiny muted">They have to accept. Until then you stay the owner.</p>
-        </div>
-      )}
-      {m.error && (
-        <span className="field-error" role="alert">
-          <Icon name="error" size={16} />
-          {m.error}
-        </span>
-      )}
-      {removing && (
-        <ConfirmDialog
-          title={`Remove ${removing.displayName}?`}
-          confirmLabel="Remove"
-          danger
-          pending={m.pending}
-          onCancel={() => setRemoving(null)}
-          onConfirm={async () => {
-            const ok = await m.run({ remove: removing.id }, (k) => api.removeMember(view.project.id, removing.id, { idempotencyKey: k }), `${removing.displayName} removed`);
-            if (ok) setRemoving(null);
-          }}
-        >
-          <p>They lose access to this group. Everyone's “done adding” is cleared because the members changed.</p>
-        </ConfirmDialog>
-      )}
-      {confirmTransfer && transferTo && (
-        <ConfirmDialog
-          title={`Offer ownership to ${nameOf(view, transferTo)}?`}
-          confirmLabel="Send offer"
-          pending={m.pending}
-          onCancel={() => setConfirmTransfer(false)}
-          onConfirm={async () => {
-            const body = { toMemberId: transferTo };
-            const ok = await m.run(body, (k) => api.transferOwnership(view.project.id, body, { idempotencyKey: k }), "Ownership offered");
-            if (ok) setConfirmTransfer(false);
-          }}
-        >
-          <p>Once they accept, they manage invitations, currencies and freezing, and you become a regular member.</p>
-        </ConfirmDialog>
       )}
     </section>
   );
