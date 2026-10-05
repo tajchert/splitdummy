@@ -46,6 +46,7 @@ Forgot something after the freeze? Start a **new round**. Frozen rounds are neve
 | 💸 **Equal or exact splits** | One payer, any subset of people, cents allocated deterministically |
 | 🌍 **Multi-currency** | Optional per group; saved manual rates, one settlement currency |
 | 🔁 **Refunds** | First-class entries, never confused with repayments |
+| 📸 **Notes and receipt photos** | A note and up to 5 bill photos per expense, shrunk in the browser with location data stripped |
 | ⏰ **Freeze deadline** | Optionally freeze the list automatically on a chosen date |
 | 👥 **People without accounts** | Owner adds people by name, invites them by email, and stands in for them when settling |
 | 🤝 **Settlement tracking** | Sent → received or disputed, at most *n − 1* transfers |
@@ -53,6 +54,11 @@ Forgot something after the freeze? Start a **new round**. Frozen rounds are neve
 | 🧾 **Audit history and CSV export** | Every change is recorded; export a group to CSV |
 | 🔑 **Public API** | Personal API keys, OpenAPI 3.1 schema, ready for scripts and AI agents |
 | 🌗 **Light and dark** | Follows the system theme |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/receipts-dark.png">
+  <img alt="Adding a note and a receipt photo to an expense, the saved expense with its note and photo, and the full-screen photo viewer" src="docs/assets/receipts-light.png">
+</picture>
 
 Splitdummy **never moves money**. Payments happen however your group prefers; the app tracks the confirmations.
 
