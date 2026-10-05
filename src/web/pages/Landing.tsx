@@ -113,7 +113,10 @@ export function Landing() {
           EN
         </span>
         <span>Splitdummy never moves money.</span>
-        <Link to="/docs/api">API docs</Link>
+        <span className="landing-foot-links">
+          <Link to="/docs/api">API docs</Link>
+          <Link to="/privacy">Privacy</Link>
+        </span>
       </footer>
     </div>
   );

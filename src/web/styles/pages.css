@@ -306,6 +306,10 @@
   font-size: 12px;
   color: var(--ink2);
 }
+.landing-foot-links {
+  display: flex;
+  gap: 14px;
+}
 
 @media (min-width: 860px) {
   .landing-bar {
@@ -2101,6 +2105,11 @@
 .api-errors { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 18px; line-height: 1.6; }
 .api-errors dt { font-weight: 700; }
 .api-errors dd { margin: 0; }
+.privacy { max-width: 800px; }
+.privacy .card { margin-top: 20px; }
+.privacy p, .privacy li { line-height: 1.65; }
+.privacy ul { margin: 0; padding-left: 20px; }
+.privacy li { margin: 8px 0; }
 .api-key-form { display: grid; gap: 14px; margin-top: 18px; }
 .api-key-secret { margin-top: 18px; padding: 16px; background: var(--accent-soft); border-radius: var(--r-md); }
 .api-key-secret .api-key-actions { margin-top: 12px; }
