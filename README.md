@@ -78,7 +78,7 @@ flowchart LR
   W -- RPC --> DO[(ProjectDO<br/>one per group<br/>SQLite)]
   W --> D1[(D1<br/>accounts · sessions<br/>directory)]
   DO -- outbox --> Q[[Queue]] --> E[Email]
-  W -. daily cron .-> R2[(R2 backups)]
+  W -. daily cron .-> R2[(R2 backups and receipt photos)]
 ```
 
 - **Exact money:** amounts are `bigint` minor units and exchange rates are exact rationals. There are no floats anywhere near a balance.
