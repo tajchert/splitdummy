@@ -269,57 +269,6 @@
   padding: 16px;
   border-radius: var(--r-lg);
 }
-.landing-invite-d {
-  display: none;
-}
-.invite-card {
-  gap: 10px;
-  border-radius: 18px;
-  padding: 16px;
-}
-.invite-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.invite-go {
-  padding: 0 14px;
-  min-height: 48px;
-  border-radius: var(--r-md);
-  flex: none;
-}
-.invite-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-width: 460px;
-}
-.invite-inline .invite-row {
-  padding: 8px 8px 8px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-}
-.invite-inline .invite-go {
-  min-height: 34px;
-  padding: 7px 12px;
-  border-radius: var(--r-sm);
-}
-.invite-bare {
-  flex: 1;
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-  min-width: 0;
-  padding: 6px 0;
-}
-.invite-bare:focus {
-  outline: none;
-}
-.invite-inline .invite-row:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
 .landing-steps {
   display: flex;
   flex-direction: column;
@@ -404,12 +353,8 @@
     padding: 16px 26px;
     border-radius: 14px;
   }
-  .landing-invite-m,
   .landing-steps {
     display: none;
-  }
-  .landing-invite-d {
-    display: block;
   }
   .landing-demo {
     display: flex;
@@ -915,9 +860,6 @@
   flex: 2;
   font-weight: 700;
 }
-.bb-side {
-  flex: 1;
-}
 .bottombar-col {
   flex-direction: column;
   gap: 8px;
@@ -1308,15 +1250,32 @@
   font-size: 15px;
   letter-spacing: 0.04em;
 }
-.refund-note {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  line-height: 1.45;
+.ef-advanced {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
 }
-.refund-note .icon {
-  color: var(--green);
-  margin-top: 1px;
+.ef-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink2);
+  width: fit-content;
+}
+.ef-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+.ef-advanced > summary .icon {
+  transition: transform 0.15s;
+}
+.ef-advanced[open] > summary .icon {
+  transform: rotate(180deg);
+}
+.ef-advanced-body {
+  padding-top: 14px;
 }
 .fx {
   background: var(--blue-soft);

@@ -5,7 +5,7 @@ import { useApi } from "../../api/context";
 import { ApiError, errorMessage } from "../../api/errors";
 import { useSubmit } from "../../api/idempotency";
 import { Sheet } from "../../components/Dialog";
-import { CurrencySelect, Field } from "../../components/Field";
+import { CurrencySelect, Field, Toggle } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 import { Amount, Banner, Icon } from "../../components/ui";
 import { clearDraft, findRejectedDraft, loadDraft, saveDraft } from "../../lib/drafts";
@@ -80,6 +80,8 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
   const usingSaved = ev.foreign && d.convMode === "RATE" && !d.rateEdited && !!saved;
   const isRefund = d.type === "REFUND";
   const noun = isRefund ? "refund" : "expense";
+  // Collapsed unless the form opens on a refund, so its type is never hidden.
+  const [advancedOpen] = useState(isRefund);
 
   // Persist the unsent draft locally as the user types.
   const firstRun = useRef(true);
@@ -132,7 +134,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
       }
       if (err.code === "ROUND_NOT_COLLECTING") {
         const keep = { ...d, rejected: true, roundSequence: round.sequence + 1 };
-        saveDraft(view.project.id, entry ? "new-" + d.type : slot, keep);
+        saveDraft(view.project.id, entry ? "new-EXPENSE" : slot, keep);
         if (entry) clearDraft(view.project.id, slot);
         setD(keep);
         void refresh();
@@ -235,13 +237,6 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
             <p>Your version wasn't saved. Close and reopen it to see the latest, then make your change again.</p>
           </Banner>
         )}
-        {isRefund && !entry && (
-          <p className="refund-note small muted">
-            <Icon name="call_received" size={16} />
-            <span>A refund is money that came back, like a returned deposit. It lowers the cost for the people it's split between. Repaying each other happens after the list is frozen.</span>
-          </p>
-        )}
-
         <div className="ef-grid ef-grid-desc">
           <Field label={isRefund ? "What was refunded?" : "What was it?"} error={errors.description}>
             {(p) => (
@@ -305,6 +300,21 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
         </div>
 
         <SplitEditor d={d} ev={ev} view={view} errors={errors} update={update} ctx={ctx} />
+
+        <details className="ef-advanced" open={advancedOpen}>
+          <summary>
+            Advanced
+            <Icon name="expand_more" size={18} />
+          </summary>
+          <div className="ef-advanced-body">
+            <Toggle
+              checked={isRefund}
+              onChange={(on) => update({ type: on ? "REFUND" : "EXPENSE" })}
+              label="This is a refund"
+              description="Money that came back, like a returned deposit. It lowers the cost for the people it's split between instead of adding to it."
+            />
+          </div>
+        </details>
 
         {errors._form && (
           <div className="form-error" role="alert">

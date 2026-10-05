@@ -141,10 +141,6 @@ function Collecting({ view }: { view: ProjectViewDTO }) {
                 ))}
               </div>
               <div className="list-actions desktop-only-flex">
-                <Link to={`${base}/refund`} className="btn btn-secondary btn-md">
-                  <Icon name="call_received" size={18} />
-                  Refund
-                </Link>
                 <Link to={`${base}/new`} className="btn btn-primary btn-md">
                   <Icon name="add" size={20} />
                   Add expense
@@ -155,7 +151,7 @@ function Collecting({ view }: { view: ProjectViewDTO }) {
             {round.entries.length === 0 ? (
               <div className="card">
                 <EmptyState icon="receipt_long" title="No expenses yet">
-                  Add what you paid for the group: who paid, how much, and who shared it. Refunds you received go in as refunds.
+                  Add what you paid for the group: who paid, how much, and who shared it. Got money back? Add it as an expense and mark it as a refund under Advanced.
                 </EmptyState>
               </div>
             ) : (
@@ -188,10 +184,6 @@ function Collecting({ view }: { view: ProjectViewDTO }) {
         <Link to={`${base}/new`} className="btn btn-primary bb-main">
           <Icon name="add" size={20} />
           Add expense
-        </Link>
-        <Link to={`${base}/refund`} className="btn btn-secondary bb-side">
-          <Icon name="call_received" size={18} />
-          Refund
         </Link>
       </BottomBar>
     </>
