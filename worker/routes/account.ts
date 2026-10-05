@@ -132,6 +132,7 @@ accountRoutes.delete("/api/me", async (c) => {
     ).bind(principal.id, now),
     c.env.DB.prepare("DELETE FROM project_directory WHERE principal_id = ?").bind(principal.id),
     c.env.DB.prepare("DELETE FROM sessions WHERE principal_id = ?").bind(principal.id),
+    c.env.DB.prepare("DELETE FROM api_keys WHERE principal_id = ?").bind(principal.id),
     c.env.DB.prepare("DELETE FROM sign_in_tokens WHERE principal_id = ? OR email = ?").bind(principal.id, principal.email),
     c.env.DB.prepare("DELETE FROM principals WHERE id = ?").bind(principal.id),
   ]);

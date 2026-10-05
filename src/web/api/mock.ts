@@ -4,6 +4,7 @@
  * Seeded with the design's "Lisbon trip" demo; you are Maya, the owner.
  */
 import type {
+  ApiKeyDTO,
   AuditEventDTO,
   BalanceDTO,
   CurrencySubtotalDTO,
@@ -23,6 +24,7 @@ import type {
   RoundViewDTO,
 } from "@shared/api";
 import {
+  CreateApiKeySchema,
   AdjustmentInputSchema,
   CreateProjectSchema,
   DeleteAccountSchema,
@@ -657,6 +659,7 @@ export interface MockApi extends Api {
 
 export function createMockApi(): MockApi {
   let state = load();
+  const apiKeys = new Map<string, ApiKeyDTO[]>();
   const listeners = new Map<string, Set<LiveHandlers>>();
   const idem = new Map<string, Promise<unknown>>();
   const latency = Number(new URLSearchParams(location.search).get("latency") ?? 150);
@@ -795,6 +798,21 @@ export function createMockApi(): MockApi {
   };
 
   const api: MockApi = {
+    listApiKeys: () => delay(() => apiKeys.get(me().id) ?? []),
+    createApiKey: (body) => delay(() => {
+      const principal = me();
+      if (principal.kind !== "ACCOUNT") fail(403, "FORBIDDEN", "Sign in with your email to create API keys.");
+      const input = CreateApiKeySchema.parse(body);
+      const token = `sd_demo_${crypto.randomUUID().replace(/-/g, "")}`;
+      const key: ApiKeyDTO = { id: uid("ak_"), name: input.name, prefix: token.slice(0, 11), scope: input.scope,
+        createdAt: now(), expiresAt: new Date(Date.now() + 90 * 86400000).toISOString() };
+      apiKeys.set(principal.id, [key, ...(apiKeys.get(principal.id) ?? [])]);
+      return { ...key, token };
+    }),
+    revokeApiKey: (id) => delay(() => {
+      const principal = me();
+      apiKeys.set(principal.id, (apiKeys.get(principal.id) ?? []).filter((key) => key.id !== id));
+    }),
     getConfig: () => delay(() => ({ turnstileSiteKey: null, environment: "development" as const })),
     getMe: () =>
       delay((): MeDTO | null => {
@@ -866,6 +884,7 @@ export function createMockApi(): MockApi {
           emit(p.project.id, "MEMBER_ACCOUNT_DELETED");
         }
         delete state.principals[pid];
+        apiKeys.delete(pid);
         state.me = null;
       }),
 

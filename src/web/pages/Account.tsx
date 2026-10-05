@@ -13,6 +13,7 @@ import { Banner, Icon, Loading } from "../components/ui";
 import { plural } from "../lib/format";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { useEmailLinkForm } from "./SignIn";
+import { ApiKeys } from "./ApiKeys";
 
 export function Account() {
   useTitle("Account");
@@ -69,6 +70,7 @@ function AccountInner() {
         <AccountName />
 
         {!me.email && <AttachEmail />}
+        <ApiKeys />
 
         <section className="card" aria-labelledby="acc-theme">
           <h2 id="acc-theme" className="card-title">

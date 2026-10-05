@@ -20,6 +20,12 @@ const entryBody = {
 };
 
 describe("http client", () => {
+  it("does not retry API key creation when the response is lost", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockRejectedValue(new TypeError("offline"));
+    const api = createHttpApi({ fetch, retryDelayMs: () => 0 });
+    await expect(api.createApiKey({ name: "Script", scope: "READ" })).rejects.toMatchObject({ code: "NETWORK" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it("sends the Idempotency-Key, same-origin credentials and JSON body on mutations", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(json(201, { id: "e_1" }));
     const api = createHttpApi({ fetch });

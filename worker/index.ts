@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { originGuard } from "./auth/middleware";
+import { apiKeyAuth, originGuard } from "./auth/middleware";
 import type { AppEnv } from "./lib/context";
 import { ApiError } from "./lib/errors";
 import { logError } from "./lib/log";
@@ -10,6 +10,8 @@ import { authRoutes } from "./routes/auth";
 import { invitationRoutes } from "./routes/invitations";
 import { liveRoutes } from "./routes/live";
 import { projectRoutes } from "./routes/projects";
+import { apiKeyRoutes } from "./routes/api-keys";
+import { openApiRoutes } from "./routes/openapi";
 
 export { ProjectDO } from "./do/ProjectDO";
 
@@ -25,10 +27,13 @@ app.use("/api/*", async (c, next) => {
   c.res.headers.set("X-Request-Id", requestId);
   c.res.headers.set("X-Content-Type-Options", "nosniff");
 });
+app.use("/api/*", apiKeyAuth);
 app.use("/api/*", originGuard);
 
 app.route("/", authRoutes);
 app.route("/", accountRoutes);
+app.route("/", apiKeyRoutes);
+app.route("/", openApiRoutes);
 app.route("/", liveRoutes);
 app.route("/", invitationRoutes);
 app.route("/", projectRoutes);

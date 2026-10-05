@@ -1,4 +1,6 @@
 import type {
+  ApiKeyDTO,
+  CreatedApiKeyDTO,
   ConfigDTO,
   DeletionPreviewDTO,
   HistoryDTO,
@@ -93,6 +95,14 @@ export function createHttpApi(opts: HttpOptions = {}): Api {
 
   return {
     getConfig: () => get<ConfigDTO>("/api/config"),
+    listApiKeys: () => get<ApiKeyDTO[]>("/api/me/api-keys"),
+    async createApiKey(body) {
+      const res = await once("POST", "/api/me/api-keys", body, {});
+      return (await res.json()) as CreatedApiKeyDTO;
+    },
+    async revokeApiKey(id) {
+      await once("DELETE", `/api/me/api-keys/${enc(id)}`, undefined, {});
+    },
     async getMe() {
       try {
         return await get<MeDTO>("/api/me");

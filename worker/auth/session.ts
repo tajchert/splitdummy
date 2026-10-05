@@ -17,6 +17,7 @@ export function sessionCookieName(url: string): string {
 export interface SessionRecord {
   tokenHash: string;
   principal: PrincipalRow;
+  apiKey?: { id: string; scope: "READ" | "WRITE" };
 }
 
 export async function createSession(db: D1Database, principal: PrincipalRow): Promise<{ token: string; expiresAt: number }> {

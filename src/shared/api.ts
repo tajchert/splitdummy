@@ -4,7 +4,8 @@
  * - All amounts in JSON are decimal-string integer MINOR units ("43000").
  * - Rates are canonical decimal strings with "." ("4.3").
  * - Dates: occurredAt is "YYYY-MM-DD"; timestamps are ISO-8601 UTC strings.
- * - Every mutation requires header `Idempotency-Key: <uuid>` and a same-origin `Origin`.
+ * - Group mutations require `Idempotency-Key: <uuid>`; cookie mutations require same-origin `Origin`.
+ * - Public API clients use `Authorization: Bearer <API key>` instead of cookies/Origin.
  * - Errors: HTTP status + body ApiErrorBody. Status map: 401 no session, 403 role,
  *   404 unavailable (never leaks membership), 409 frozen/stale/state, 422 invalid input, 429 limits.
  */
@@ -92,6 +93,21 @@ export interface MeDTO {
   email: string | null; // verified email when present
   displayName: string | null;
 }
+
+export const CreateApiKeySchema = z.object({
+  name: z.string().trim().min(1, "Enter a key name").max(80),
+  scope: z.enum(["READ", "WRITE"]).default("READ"),
+});
+export interface ApiKeyDTO {
+  id: string;
+  name: string;
+  prefix: string;
+  scope: "READ" | "WRITE";
+  createdAt: string;
+  expiresAt: string;
+}
+/** The secret is returned only by creation. It cannot be retrieved later. */
+export interface CreatedApiKeyDTO extends ApiKeyDTO { token: string }
 
 export interface ProjectSummaryDTO {
   id: string;
