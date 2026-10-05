@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { environmentOf, isAllowedOrigin, isLocal } from "../../worker/lib/env";
 import { call, mockProjectDO, mockTurnstile, signIn, uniqueEmail } from "./helpers";
 
 const P = `p_${"ab".repeat(16)}`;
@@ -99,5 +100,23 @@ describe("caching", () => {
     }
     const unauth = await call("/api/me");
     expect(unauth.headers.get("cache-control")).toBe("no-store");
+  });
+});
+
+describe("environment", () => {
+  const envOf = (ENVIRONMENT: string | undefined) => ({ ENVIRONMENT, APP_ORIGIN: "https://splitdummy.example" }) as unknown as Env;
+
+  it("only enables local-dev behaviour when explicitly asked for", () => {
+    expect(isLocal(envOf("development"))).toBe(true);
+    expect(isLocal(envOf("test"))).toBe(true);
+    expect(isLocal(envOf("staging"))).toBe(false);
+  });
+
+  it("treats a missing or mistyped ENVIRONMENT as production", () => {
+    for (const value of [undefined, "", "prod", "Development", "dev"]) {
+      expect(environmentOf(envOf(value))).toBe("production");
+      expect(isLocal(envOf(value))).toBe(false);
+      expect(isAllowedOrigin(envOf(value), "http://localhost:5173")).toBe(false);
+    }
   });
 });

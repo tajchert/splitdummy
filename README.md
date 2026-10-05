@@ -114,7 +114,6 @@ Splitdummy runs entirely on Cloudflare. Before you deploy:
 1. In `wrangler.jsonc`, set your own `account_id`, domains, `APP_ORIGIN` and `EMAIL_FROM`.
 2. Create the resources: a D1 database (put its ID in the config), the Queues and dead-letter queues, an R2 bucket, and a Turnstile widget (put its site key in `wrangler.jsonc` and `scripts/deploy.sh`).
 3. Enable [Email Service](https://developers.cloudflare.com/email-service/) sending for your domain.
-4. Make sure `ENVIRONMENT` is `production` or `staging`. Any other value enables development behaviour.
 
 ```bash
 scripts/deploy.sh staging --init-secrets   # first deploy of an environment

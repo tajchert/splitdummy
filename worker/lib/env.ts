@@ -2,9 +2,10 @@ import type { ConfigDTO } from "@shared/api";
 
 export type Environment = ConfigDTO["environment"];
 
+/** Fails closed: a missing or unknown ENVIRONMENT is production, never the relaxed local mode. */
 export function environmentOf(env: Env): Environment {
-  const value: string = env.ENVIRONMENT;
-  return value === "production" || value === "staging" || value === "test" ? value : "development";
+  const value: string | undefined = env.ENVIRONMENT;
+  return value === "development" || value === "staging" || value === "test" ? value : "production";
 }
 
 export const isProduction = (env: Env) => environmentOf(env) === "production";
