@@ -6,6 +6,7 @@
 import type {
   AddMemberResultDTO,
   ApiKeyDTO,
+  AttachmentDTO,
   AuditEventDTO,
   BalanceDTO,
   CurrencySubtotalDTO,
@@ -216,6 +217,12 @@ function roundView(p: MockProject, r: MockRound): RoundViewDTO {
   };
 }
 
+/** In-memory only: object URLs don't survive a reload, so persisted entries fall back to a placeholder image. */
+const mockPhotos = new Map<string, { dto: AttachmentDTO; url: string; uploader: string; entryId: string | null }>();
+const PLACEHOLDER_PHOTO =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="100%" height="100%" fill="#e5e7eb"/><text x="50%" y="50%" text-anchor="middle" fill="#6b7280" font-family="sans-serif" font-size="20">Receipt</text></svg>');
+
 function buildEntry(p: MockProject, roundId: string, body: EntryBody, actor: string, prev?: EntryDTO): EntryDTO {
   const base = p.project.baseCurrency;
   const oExp = exp(body.originalCurrency);
@@ -256,10 +263,11 @@ function buildEntry(p: MockProject, roundId: string, body: EntryBody, actor: str
   const rows = (o: Shares, b: Shares) => Object.keys(o).sort().map((m) => ({ memberId: m, originalAmount: o[m]!.toString(), baseAmount: (b[m] ?? 0n).toString() }));
   const saved = p.rates.find((r) => r.currency === body.originalCurrency);
   const t = now();
+  const id = prev?.id ?? uid("e_");
   const rateSource =
     c.method === "IDENTITY" ? "IDENTITY" : c.method === "ACTUAL_BASE_AMOUNT" ? "ACTUAL_CHARGE" : saved && saved.rate === v.rateString ? "OWNER_DEFAULT" : "ENTRY_OVERRIDE";
   return {
-    id: prev?.id ?? uid("e_"),
+    id,
     roundId,
     type: body.type,
     creatorMemberId: prev?.creatorMemberId ?? actor,
@@ -288,7 +296,19 @@ function buildEntry(p: MockProject, roundId: string, body: EntryBody, actor: str
     correctedEntryId: null,
     correctedRoundId: null,
     note: body.note === undefined ? (prev?.note ?? null) : body.note?.trim() || null,
-    attachments: prev?.attachments ?? [],
+    attachments:
+      body.attachmentIds === undefined
+        ? (prev?.attachments ?? [])
+        : body.attachmentIds.map((aid, i) => {
+            const kept = prev?.attachments?.find((a) => a.id === aid);
+            if (kept) return kept;
+            const photo = mockPhotos.get(aid);
+            if (!photo || photo.entryId !== null || photo.uploader !== actor) {
+              fail(422, "VALIDATION", "This photo isn't available. Remove it and add it again.", `attachmentIds.${i}`);
+            }
+            photo.entryId = id;
+            return photo.dto;
+          }),
     revision: (prev?.revision ?? 0) + 1,
     createdAt: prev?.createdAt ?? t,
     updatedAt: t,
@@ -1226,6 +1246,22 @@ export function createMockApi(): MockApi {
       });
     },
 
+    uploadAttachment: (id, image, o) =>
+      mutate(o, null, "ATTACHMENT_UPLOADED", () => {
+        const p = proj(id);
+        const m = memberOf(p);
+        collecting(p, active(p).round.id);
+        const dto: AttachmentDTO = { id: uid("att_"), contentType: image.type === "image/jpeg" ? "image/jpeg" : "image/webp", bytes: image.size, width: 0, height: 0 };
+        let url = PLACEHOLDER_PHOTO;
+        try {
+          url = URL.createObjectURL(image);
+        } catch {
+          /* no object URLs here (e.g. jsdom); keep the placeholder */
+        }
+        mockPhotos.set(dto.id, { dto, url, uploader: m.id, entryId: null });
+        return dto;
+      }),
+    attachmentUrl: (_id, attachmentId) => mockPhotos.get(attachmentId)?.url ?? PLACEHOLDER_PHOTO,
     createEntry: (id, roundId, body, o) =>
       mutate(o, id, "ENTRY_CREATED", () => {
         const p = proj(id);

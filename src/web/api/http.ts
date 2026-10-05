@@ -1,6 +1,7 @@
 import type {
   AddMemberResultDTO,
   ApiKeyDTO,
+  AttachmentDTO,
   CreatedApiKeyDTO,
   ConfigDTO,
   DeletionPreviewDTO,
@@ -47,12 +48,13 @@ export function createHttpApi(opts: HttpOptions = {}): Api {
 
   async function once(method: Method, path: string, body: unknown, headers: Record<string, string>, signal?: AbortSignal) {
     let res: Response;
+    const raw = body instanceof Blob;
     try {
       res = await doFetch(path, {
         method,
         credentials: "same-origin",
-        headers: { Accept: "application/json", ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        headers: { Accept: "application/json", ...(body !== undefined ? { "Content-Type": raw ? body.type : "application/json" } : {}), ...headers },
+        body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
         signal,
       });
     } catch (e) {
@@ -153,6 +155,8 @@ export function createHttpApi(opts: HttpOptions = {}): Api {
     updateEntry: (id, r, e, body, o) => request("PATCH", `${R(id, r)}/entries/${enc(e)}`, body, o),
     deleteEntry: (id, r, e, body, o) => request("DELETE", `${R(id, r)}/entries/${enc(e)}`, body, o),
     createAdjustment: (id, r, body, o) => request("POST", `${R(id, r)}/adjustments`, body, o),
+    uploadAttachment: (id, image, o) => request<AttachmentDTO>("POST", `${P(id)}/attachments`, image, o),
+    attachmentUrl: (id, attachmentId) => `${P(id)}/attachments/${enc(attachmentId)}`,
 
     setReadiness: (id, r, body, o) => request("PUT", `${R(id, r)}/readiness/me`, body, o),
     getReview: (id, r) => get<ReviewDTO>(`${R(id, r)}/review`),
