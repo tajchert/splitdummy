@@ -5,6 +5,7 @@ import { requireSession } from "../auth/middleware";
 import { toPrincipal, type PrincipalRow } from "../auth/principals";
 import { clearSessionCookie } from "../auth/session";
 import type { AppEnv } from "../lib/context";
+import { attachmentPrefix, deletePrefix } from "../lib/attachments";
 import { directoryEntries } from "../lib/directory";
 import { ApiError } from "../lib/errors";
 import { parseWith, readJsonBody } from "../lib/http";
@@ -13,7 +14,6 @@ import { callProject, isOk, toHttpResponse } from "../lib/project";
 import { enforceLimit } from "../lib/ratelimit";
 
 const INSPECT_CONCURRENCY = 5;
-const R2_DELETE_BATCH = 1000;
 
 interface ProjectState {
   projectId: string;
@@ -61,15 +61,11 @@ function preview(states: ProjectState[]): DeletionPreviewDTO {
   return body;
 }
 
-/** A deleted project: backups (owner's only), then every member's directory row behind a tombstone. */
-async function forgetProject(env: Env, projectId: string, backups: boolean): Promise<void> {
-  if (backups) {
-    let cursor: string | undefined;
-    do {
-      const listed = await env.BACKUPS.list({ prefix: `projects/${projectId}/`, cursor, limit: R2_DELETE_BATCH });
-      if (listed.objects.length > 0) await env.BACKUPS.delete(listed.objects.map((o) => o.key));
-      cursor = listed.truncated ? listed.cursor : undefined;
-    } while (cursor);
+/** A deleted project: its stored files (owner's deletion only: backups, photos), then every member's directory row behind a tombstone. */
+async function forgetProject(env: Env, projectId: string, purgeStorage: boolean): Promise<void> {
+  if (purgeStorage) {
+    await deletePrefix(env.BACKUPS, `projects/${projectId}/`);
+    await deletePrefix(env.ATTACHMENTS, attachmentPrefix(projectId));
   }
   const now = Date.now();
   await env.DB.batch([

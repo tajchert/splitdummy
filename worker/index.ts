@@ -7,6 +7,7 @@ import { logError } from "./lib/log";
 import { handleQueue } from "./queue/consumer";
 import { handleScheduled } from "./queue/scheduled";
 import { accountRoutes } from "./routes/account";
+import { attachmentRoutes } from "./routes/attachments";
 import { authRoutes } from "./routes/auth";
 import { invitationRoutes } from "./routes/invitations";
 import { memberRoutes } from "./routes/members";
@@ -27,7 +28,8 @@ app.use("/api/*", async (c, next) => {
   c.set("session", undefined);
   await next();
   if (c.res.status === 101) return; // WebSocket handshake responses are immutable
-  c.res.headers.set("Cache-Control", "no-store");
+  // Routes that set their own caching (photos) keep it; everything else is never cached.
+  if (!c.res.headers.has("Cache-Control")) c.res.headers.set("Cache-Control", "no-store");
   c.res.headers.set("X-Request-Id", requestId);
   c.res.headers.set("X-Content-Type-Options", "nosniff");
 });
@@ -41,6 +43,7 @@ app.route("/", openApiRoutes);
 app.route("/", liveRoutes);
 app.route("/", invitationRoutes);
 app.route("/", memberRoutes);
+app.route("/", attachmentRoutes);
 app.route("/", projectRoutes);
 app.route("/", clientErrorRoutes);
 

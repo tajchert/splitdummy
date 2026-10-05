@@ -599,6 +599,8 @@ export const ENDPOINTS = {
   startRound: "POST /api/projects/:projectId/rounds",
   history: "GET /api/projects/:projectId/history",
   export: "GET /api/projects/:projectId/export", // text/csv
+  uploadAttachment: "POST /api/projects/:projectId/attachments", // raw image/webp | image/jpeg body -> 201 AttachmentDTO (pending)
+  getAttachment: "GET /api/projects/:projectId/attachments/:attachmentId", // image bytes
   live: "GET /api/projects/:projectId/live", // WebSocket; server pushes LiveMessage
   reportClientError: "POST /api/client-errors", // -> 204
 } as const;
