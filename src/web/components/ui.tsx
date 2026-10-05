@@ -124,8 +124,12 @@ export function Avatar({ name, tone, size = 34, ready, dim }: { name: string; to
     >
       {tone === "deleted" ? <Icon name="person_off" size={Math.round(size * 0.5)} /> : initial(name)}
       {ready && (
-        <span className="avatar-check">
-          <Icon name="check" size={12} weight={700} />
+        // Badge scales with the avatar; at 40px this is 17px with a 12px check.
+        <span
+          className="avatar-check"
+          style={{ width: Math.round(size * 0.42), height: Math.round(size * 0.42), right: -Math.round(size * 0.1), bottom: -Math.round(size * 0.1) }}
+        >
+          <Icon name="check" size={Math.round(size * 0.3)} weight={700} />
         </span>
       )}
     </span>

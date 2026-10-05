@@ -396,7 +396,7 @@ export function ReadinessCard({ view }: { view: ProjectViewDTO }) {
           const st = readyStatus(round, m.id);
           return (
             <li key={m.id} className="ready-list-row">
-              <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={30} />
+              <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={30} ready={st.ready} dim={!st.ready} />
               <span className="ready-list-name">
                 {nameOf(view, m.id, { you: true })}
                 {m.id === view.me.memberId && (

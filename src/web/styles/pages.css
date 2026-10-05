@@ -678,6 +678,9 @@
   align-items: center;
   gap: 10px;
 }
+.ready-list-row .avatar:not(.avatar-ready) {
+  border: 2px solid var(--line);
+}
 .ready-list-name {
   flex: 1;
   font-size: 14px;
