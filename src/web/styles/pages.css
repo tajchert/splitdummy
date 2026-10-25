@@ -641,6 +641,30 @@
 .readiness-card {
   gap: 12px;
 }
+.participants-card > summary {
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+}
+.participants-card > summary::-webkit-details-marker {
+  display: none;
+}
+.participants-chevron {
+  transition: transform 0.15s;
+}
+.participants-card[open] .participants-chevron {
+  transform: rotate(180deg);
+}
+.participants-list {
+  margin-top: 10px;
+}
+.participants-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-block: 6px;
+  font-size: 14px;
+}
 .ready-avatars {
   list-style: none;
   margin: 0;

@@ -17,6 +17,7 @@ import {
   FreezeNote,
   GroupHeader,
   groupBase,
+  ParticipantsCard,
   ReadinessCard,
   SettlementTotalCard,
   sortEntries,
@@ -228,6 +229,7 @@ function Settling({ view }: { view: ProjectViewDTO }) {
           <div className="settle-total">
             <SettlementTotalCard view={view} />
           </div>
+          <ParticipantsCard view={view} />
           <Link to={`${base}/entries`} className="card link-card desktop-only-flex">
             <span className="meta-item ink">
               <Icon name="lock" size={17} />
@@ -437,6 +439,7 @@ function Settled({ view }: { view: ProjectViewDTO }) {
                 <p className="small muted">Ask {nameOf(view, view.project.ownerMemberId)} (the owner) to start the next round, then add it there.</p>
               )}
             </div>
+            <ParticipantsCard view={view} />
             <RoundsSwitcher view={view} />
           </div>
         </div>

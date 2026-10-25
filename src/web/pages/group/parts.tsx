@@ -422,6 +422,31 @@ export function ReadinessCard({ view }: { view: ProjectViewDTO }) {
   );
 }
 
+/** Everyone in the group, collapsed by default; for frozen and settled rounds, where the readiness card is gone. */
+export function ParticipantsCard({ view }: { view: ProjectViewDTO }) {
+  const members = activeMembers(view);
+  return (
+    <details className="card participants-card">
+      <summary className="card-head">
+        <span className="card-title">People</span>
+        <span className="card-sub meta-item">
+          {members.length}
+          <Icon name="expand_more" size={18} className="participants-chevron" />
+        </span>
+      </summary>
+      <ul className="plain-list participants-list">
+        {members.map((m) => (
+          <li key={m.id} className="participants-row">
+            <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={28} />
+            <span className="grow">{nameOf(view, m.id, { you: true, owner: true })}</span>
+            <PlaceholderTag member={m} />
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 /* ---------- transfers ---------- */
 
 const STATE: Record<InstructionDTO["state"], { label: string; icon: string; cls: string }> = {
