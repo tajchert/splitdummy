@@ -641,6 +641,10 @@
 .readiness-card {
   gap: 12px;
 }
+/* A closed <details> keeps its (hidden) content slot as a flex item, so the card gap would pad the bottom. */
+.participants-card {
+  gap: 0;
+}
 .participants-card > summary {
   cursor: pointer;
   list-style: none;
