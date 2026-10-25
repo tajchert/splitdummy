@@ -1456,7 +1456,6 @@ export function createMockApi(): MockApi {
         const stands = (mid: string) => mid === m.id || (m.isOwner && p.members.find((x) => x.id === mid)?.kind === "PLACEHOLDER");
         if (!stands(i.toMemberId)) fail(403, "FORBIDDEN", "Only the recipient can confirm receipt.");
         if (i.state === "CONFIRMED") return;
-        if (i.state !== "SENT") fail(409, "INVALID_TRANSITION", "The sender hasn't marked this as sent yet.");
         Object.assign(i, { state: "CONFIRMED", confirmedAt: now(), revision: i.revision + 1 });
         log(p, m.id, "INSTRUCTION_CONFIRMED", r.round.id, i.id, `${party(p, i.toMemberId, m)} confirmed receipt from ${nameOf(p, i.fromMemberId)}${by(i.toMemberId, m)}`);
         if (r.instructions.every((x) => x.state === "CONFIRMED")) {

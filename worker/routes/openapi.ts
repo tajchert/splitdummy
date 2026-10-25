@@ -88,7 +88,7 @@ const operations: Partial<Record<keyof typeof api.ENDPOINTS, Operation>> = {
   freezeSchedule: { summary: "Schedule or cancel automatic freezing", description: "Owner only. Freezes at the end of the date in the IANA timeZone. Use date: null to cancel.", body: api.FreezeScheduleSchema, response: round },
   getRound: { summary: "Get a current or historical round", response: roundView },
   sent: { summary: "Record that you sent a transfer", description: "Sender only; the owner may also act for a placeholder sender. This records a real-world payment; it does not move money.", body: api.InstructionActionSchema, response: actionResult },
-  received: { summary: "Confirm that you received a transfer", description: "Recipient only; the owner may also act for a placeholder recipient. This records a real-world payment; it does not move money.", body: api.InstructionActionSchema, response: actionResult },
+  received: { summary: "Confirm that you received a transfer", description: "Recipient only; the owner may also act for a placeholder recipient. Works whether or not the sender marked it sent. This records a real-world payment; it does not move money.", body: api.InstructionActionSchema, response: actionResult },
   dispute: { summary: "Dispute a transfer", description: "Recipient only; the owner may also act for a placeholder recipient.", body: api.InstructionActionSchema, response: actionResult },
   startRound: { summary: "Start the next round", description: "Owner only; previous round must be settled.", response: round, created: true },
   history: { summary: "Get round history and audit events", response: object({ rounds: z.array(round), events: z.array(object({

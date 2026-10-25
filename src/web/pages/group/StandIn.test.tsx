@@ -87,6 +87,14 @@ describe("owner stands in for placeholders", () => {
     await waitFor(() => expect(received).toHaveBeenCalledWith("p_porto", expect.any(String), "i_0", expect.anything(), expect.anything()));
   });
 
+  it("the recipient can confirm receipt before the sender marks it sent", async () => {
+    const api = mockWith("pr_lea", (s) => settlingPorto(s, [["m_kai", "m_lea", "PROPOSED"]]));
+    const received = vi.spyOn(api, "markReceived");
+    renderAt(api, "/g/p_porto");
+    fireEvent.click(await screen.findByRole("button", { name: "I've received it" }));
+    await waitFor(() => expect(received).toHaveBeenCalledWith("p_porto", expect.any(String), "i_0", expect.anything(), expect.anything()));
+  });
+
   it("another member paid a placeholder: the owner confirms receipt for them; a placeholder paying a member is not the owner's task", async () => {
     const api = mockWith("pr_lea", (s) =>
       settlingPorto(s, [

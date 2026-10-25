@@ -179,7 +179,6 @@ describe("settlement instructions (criteria 17–20)", () => {
     expect((await errorCode(act(g.owner, "markSent", g, i.id))).status).toBe(403);
     expect((await errorCode(act(carol, "markSent", g, i.id))).status).toBe(403);
     expect((await errorCode(act(bob, "markReceived", g, i.id))).status).toBe(403);
-    expect(await errorCode(act(g.owner, "markReceived", g, i.id))).toMatchObject({ status: 409, code: "INVALID_TRANSITION" });
     expect(await errorCode(act(g.owner, "markDisputed", g, i.id))).toMatchObject({ status: 409, code: "INVALID_TRANSITION" });
 
     const sent = await Promise.all([act(bob, "markSent", g, i.id), act(bob, "markSent", g, i.id)]);
@@ -191,6 +190,20 @@ describe("settlement instructions (criteria 17–20)", () => {
     const transfers = await sql<{ n: number }>(g, "SELECT COUNT(*) AS n FROM confirmed_transfers WHERE instruction_id = ?", i.id);
     expect(transfers[0]!.n).toBe(1);
     expect((await errorCode(act(bob, "markSent", g, "i_unknown"))).status).toBe(404);
+  });
+
+  it("the recipient can confirm receipt before the sender marks it sent", async () => {
+    const g = await createGroup({ members: 1 });
+    const bob = g.members[0]!;
+    await g.owner.ok("createEntry", { roundId: g.roundId }, expense(g.owner.memberId, [g.owner.memberId, bob.memberId], "2000"));
+    const { instructions } = await freezeNow(g);
+    const i = instructions[0]!;
+    const done = await g.owner.ok<InstructionResultDTO>("markReceived", { roundId: g.roundId, instructionId: i.id });
+    expect(done.instruction).toMatchObject({ state: "CONFIRMED", sentAt: null });
+    expect(done.round.status).toBe("SETTLED");
+    expect(await errorCode(act(bob, "markSent", g, i.id))).toMatchObject({ code: "INVALID_TRANSITION" });
+    const transfers = await sql<{ sent_at: string | null }>(g, "SELECT sent_at FROM confirmed_transfers WHERE instruction_id = ?", i.id);
+    expect(transfers).toEqual([{ sent_at: null }]);
   });
 
   it("a dispute blocks completion until the recipient confirms (criterion 19)", async () => {

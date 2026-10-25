@@ -240,7 +240,8 @@ function transition(tx: Tx, req: DoRequest, action: Action): OpResult {
 
   const allowed: Record<Action, InstructionRow["state"][]> = {
     SENT: ["PROPOSED", "DISPUTED"],
-    CONFIRMED: ["SENT", "DISPUTED"],
+    // The recipient may confirm before the sender marks it sent: the money arrived either way.
+    CONFIRMED: ["PROPOSED", "SENT", "DISPUTED"],
     DISPUTED: ["SENT"],
   };
   if (!allowed[action].includes(instruction.state)) {

@@ -524,13 +524,14 @@ export function TaskCards({ view }: { view: ProjectViewDTO }) {
   const me = view.me.memberId;
   // The owner stands in for placeholders, who have no account to act with.
   const isPh = (id: string) => view.me.isOwner && member(view, id)?.kind === "PLACEHOLDER";
-  const tasks = view.current.instructions.filter(
-    (i) =>
-      ((i.toMemberId === me || isPh(i.toMemberId)) && i.state === "SENT") ||
-      ((i.fromMemberId === me || isPh(i.fromMemberId)) && (i.state === "PROPOSED" || i.state === "DISPUTED")),
-  );
+  const sends = (i: InstructionDTO) => (i.fromMemberId === me || isPh(i.fromMemberId)) && (i.state === "PROPOSED" || i.state === "DISPUTED");
+  // Recipients can confirm money that arrived before the sender marked it sent (or after a dispute).
+  const receives = (i: InstructionDTO) => (i.toMemberId === me || isPh(i.toMemberId)) && i.state !== "CONFIRMED";
+  const tasks = view.current.instructions.filter((i) => sends(i) || receives(i));
   const order = { SENT: 0, DISPUTED: 1, PROPOSED: 2, CONFIRMED: 3 } as const;
-  tasks.sort((a, b) => order[a.state] - order[b.state]);
+  // Early receipts aren't required, so they go after everything the user has to do.
+  const rank = (i: InstructionDTO) => order[i.state] + (i.state !== "SENT" && !sends(i) ? 4 : 0);
+  tasks.sort((a, b) => rank(a) - rank(b));
   if (tasks.length === 0) return null;
   return (
     <>
@@ -577,6 +578,7 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
 
   let text: ReactNode;
   let actions: ReactNode;
+  let eyebrow = "Your task";
   const sentOn = i.sentAt ? ` on ${fmtShortDate(i.sentAt)}` : "";
   const sendButton = (label: string) => (
     <div className="task-actions">
@@ -610,6 +612,29 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
         <button type="button" className="btn btn-outline btn-md-tall" disabled={sub.pending} onClick={() => setDisputing(true)}>
           <Icon name="close" size={18} />
           Not received
+        </button>
+      </div>
+    );
+  } else if (i.fromMemberId !== me && !standIn(i.fromMemberId)) {
+    // Not marked sent yet, or disputed: the recipient can still confirm the money arrived.
+    const forWho = i.toMemberId === me ? null : nameOf(view, i.toMemberId);
+    const from = nameOf(view, i.fromMemberId);
+    text =
+      i.state === "DISPUTED" ? (
+        <>
+          {forWho ? `${forWho} hasn't` : "You haven't"} received {from}'s <b className="amount">{amount}</b> yet. Arrived after all?
+        </>
+      ) : (
+        <>
+          {from} owes {forWho ?? "you"} <b className="amount">{amount}</b> and hasn't marked it sent. Already {forWho ? `with ${forWho}` : "got it"}?
+        </>
+      );
+    eyebrow = "Incoming";
+    actions = (
+      <div className="task-actions">
+        <button type="button" className="btn btn-outline btn-md-tall" disabled={sub.pending} onClick={() => void act("received")}>
+          <Icon name="check" size={18} />
+          {forWho ? `Received (for ${forWho})` : "I've received it"}
         </button>
       </div>
     );
@@ -647,8 +672,8 @@ function TaskCard({ view, i }: { view: ProjectViewDTO; i: InstructionDTO }) {
   }
 
   return (
-    <section className="task-card" aria-label="Your task">
-      <div className="task-eyebrow">Your task</div>
+    <section className="task-card" aria-label={eyebrow}>
+      <div className="task-eyebrow">{eyebrow}</div>
       <p className="task-text">{text}</p>
       {actions}
       {error && (
