@@ -32,7 +32,7 @@ it("lists everyone in a collapsed People card while settling", async () => {
   );
   const details = (await screen.findByText("People")).closest("details")!;
   expect(details.open).toBe(false);
-  expect(details.textContent).toContain("Maya (you, owner)");
+  expect(details.textContent).toContain("Maya you owner");
   expect(details.textContent).toContain("Kai");
   expect(details.textContent).toContain("Ana");
 });

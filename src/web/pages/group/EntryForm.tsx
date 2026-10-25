@@ -25,7 +25,7 @@ import { activeMembers, nameOf, readinessOf, roundLabel } from "../../lib/projec
 import { usePhotoUploads } from "../../lib/usePhotoUploads";
 import { useProject, useView } from "../../state/project";
 import { NoteAndPhotos } from "./NoteAndPhotos";
-import { groupBase, PlaceholderTag } from "./parts";
+import { groupBase, Who } from "./parts";
 import { noteSelfReadyChange } from "./selfChange";
 
 export function EntryFormRoute({ type }: { type?: "EXPENSE" | "REFUND" }) {
@@ -569,7 +569,7 @@ function SplitEditor({ d, ev, view, errors, update, ctx }: {
                 onChange={(e) => toggle(m.id, e.target.checked)}
               />
               <label htmlFor={`p-${m.id}`} className="grow split-name">
-                {nameOf(view, m.id, { you: true, owner: true })} <PlaceholderTag member={m} hidden />
+                <Who view={view} id={m.id} you owner hidden />
               </label>
               {d.splitMode === "EQUAL" || !on ? (
                 <span className="split-share amount">{shareOf(m.id)}</span>

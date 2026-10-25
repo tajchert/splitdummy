@@ -214,7 +214,9 @@ export function Review() {
               return (
                 <div key={m.id} className="ready-line">
                   <Icon name={ok ? "check_circle" : "error"} size={20} className={ok ? "green" : "amber"} />
-                  <span className="grow">{nameOf(view, m.id, { you: true, owner: true })}</span>
+                  <span className="grow">
+                    <Who view={view} id={m.id} you owner />
+                  </span>
                   {!ok && <span className="tiny amber strong">Not finished</span>}
                   {doneOnFreeze && <span className="tiny muted">Done when you freeze</span>}
                 </div>

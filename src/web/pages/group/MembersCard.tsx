@@ -11,6 +11,7 @@ import { Avatar, Icon } from "../../components/ui";
 import { fmtDate } from "../../lib/format";
 import { activeMembers, nameOf, toneFor } from "../../lib/project";
 import { useProject } from "../../state/project";
+import { Who } from "./parts";
 
 /** Idempotent settings mutation: refreshes the project afterwards and keeps the last error for display. */
 export function useMutation() {
@@ -75,7 +76,9 @@ export function MembersCard({ view }: { view: ProjectViewDTO }) {
           <li key={x.id} className="row-plain member-row">
             <Avatar name={x.displayName} tone={toneFor(view, x.id)} size={32} />
             <div className="grow">
-              <span className="member-name">{nameOf(view, x.id, { you: true })}</span>
+              <span className="member-name">
+                <Who view={view} id={x.id} you />
+              </span>
               <div className="tiny muted">
                 {x.kind === "PLACEHOLDER" ? <span className={`chip-sm${x.inviteState === "INVITE_EXPIRED" ? " chip-warn" : ""}`}>{memberRole(x)}</span> : memberRole(x)}
                 {x.kind === "PERSON" && ` · joined ${fmtDate(x.joinedAt)}`}

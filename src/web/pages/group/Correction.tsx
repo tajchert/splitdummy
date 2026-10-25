@@ -13,7 +13,7 @@ import { Amount, Banner, Icon } from "../../components/ui";
 import { decimalSeparator, fmtDay, fmtMoney, minorToInput, todayYmd } from "../../lib/format";
 import { effectFor, nameOf, roundLabel } from "../../lib/project";
 import { useProject, useView } from "../../state/project";
-import { groupBase } from "./parts";
+import { groupBase, Who } from "./parts";
 
 /** Signed base input: "-12.50", "+3", "4,20". Empty means zero. */
 function parseSigned(s: string, exp: number, sep: "." | ","): bigint | null {
@@ -181,7 +181,9 @@ export function Correction() {
         <div className="card card-flush">
           {people.map((id) => (
             <div key={id} className="row correction-row">
-              <span className="grow">{nameOf(view, id, { you: true, owner: true })}</span>
+              <span className="grow">
+                <Who view={view} id={id} you owner />
+              </span>
               {mode === "reverse" ? (
                 <Amount minor={reverse[id]!} code={code} exponent={exp} signed tone="auto" />
               ) : (

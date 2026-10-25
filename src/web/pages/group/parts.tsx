@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { EntryDTO, InstructionDTO, MemberDTO, ProjectViewDTO, RoundViewDTO } from "@shared/api";
 import { useApi } from "../../api/context";
@@ -40,18 +40,31 @@ export function PlaceholderTag({ member, hidden }: { member: MemberDTO | undefin
   );
 }
 
-/** A member's name; deleted accounts render muted. */
-export function Who({ view, id, you }: { view: ProjectViewDTO; id: string | null | undefined; you?: boolean }) {
-  const name = nameOf(view, id, { you });
+/** A member's name with "you" / "owner" / "placeholder" chips; deleted accounts render muted. */
+export function Who({ view, id, you, owner, hidden }: { view: ProjectViewDTO; id: string | null | undefined; you?: boolean; owner?: boolean; hidden?: boolean }) {
+  const name = nameOf(view, id);
   if (isDeleted(view, id)) return <span className="member-deleted">{name}</span>;
   const m = member(view, id);
-  if (m?.kind === "PLACEHOLDER")
-    return (
-      <>
-        {name} <PlaceholderTag member={m} />
-      </>
-    );
-  return <>{name}</>;
+  const tags = [you && id === view.me.memberId && "you", owner && m?.isOwner && "owner"].filter((t): t is string => !!t);
+  return (
+    <>
+      {name}
+      {tags.map((t) => (
+        <Fragment key={t}>
+          {" "}
+          <span className="chip-sm" {...(hidden ? { "aria-hidden": true } : {})}>
+            {t}
+          </span>
+        </Fragment>
+      ))}
+      {m?.kind === "PLACEHOLDER" && (
+        <>
+          {" "}
+          <PlaceholderTag member={m} hidden={hidden} />
+        </>
+      )}
+    </>
+  );
 }
 
 /* ---------- header ---------- */
@@ -399,7 +412,7 @@ export function ReadinessCard({ view }: { view: ProjectViewDTO }) {
             <li key={m.id} className="ready-list-row">
               <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={30} ready={st.ready} dim={!st.ready} />
               <span className="ready-list-name">
-                {nameOf(view, m.id, { you: true, owner: true })}
+                <Who view={view} id={m.id} you owner />
                 {m.id === view.me.memberId && (
                   <Link to={`${base}/settings#your-name`} className="icon-btn icon-btn-xs" aria-label="Change your name in this group">
                     <Icon name="edit" size={15} />
@@ -438,8 +451,9 @@ export function ParticipantsCard({ view }: { view: ProjectViewDTO }) {
         {members.map((m) => (
           <li key={m.id} className="participants-row">
             <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={28} />
-            <span className="grow">{nameOf(view, m.id, { you: true, owner: true })}</span>
-            <PlaceholderTag member={m} />
+            <span className="grow">
+              <Who view={view} id={m.id} you owner />
+            </span>
           </li>
         ))}
       </ul>
