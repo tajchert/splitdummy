@@ -40,10 +40,11 @@ export function PlaceholderTag({ member, hidden }: { member: MemberDTO | undefin
   );
 }
 
-type ChipOpts = { you?: boolean; owner?: boolean; hidden?: boolean };
+/** `placeholder: false` leaves out the placeholder chip where the row already shows the member's role. */
+type ChipOpts = { you?: boolean; owner?: boolean; placeholder?: boolean; hidden?: boolean };
 
 /** The "you" / "owner" / "placeholder" chips for a member, each led by a space. */
-export function MemberChips({ view, id, you, owner, hidden }: { view: ProjectViewDTO; id: string | null | undefined } & ChipOpts) {
+export function MemberChips({ view, id, you, owner, placeholder = true, hidden }: { view: ProjectViewDTO; id: string | null | undefined } & ChipOpts) {
   if (isDeleted(view, id)) return null;
   const m = member(view, id);
   const aria = hidden ? { "aria-hidden": true } : {};
@@ -53,12 +54,13 @@ export function MemberChips({ view, id, you, owner, hidden }: { view: ProjectVie
       {tags.map((t) => (
         <Fragment key={t}>
           {" "}
-          <span className={`chip-sm chip-${t}`} {...aria}>
+          {/* Neutral on purpose: avatars use every tone colour. */}
+          <span className="chip-sm" {...aria}>
             {t}
           </span>
         </Fragment>
       ))}
-      {m?.kind === "PLACEHOLDER" && (
+      {placeholder && m?.kind === "PLACEHOLDER" && (
         <>
           {" "}
           <PlaceholderTag member={m} hidden={hidden} />
@@ -68,10 +70,11 @@ export function MemberChips({ view, id, you, owner, hidden }: { view: ProjectVie
   );
 }
 
-/** A member's name followed by its chips; deleted accounts render muted. */
-export function Who({ view, id, ...chips }: { view: ProjectViewDTO; id: string | null | undefined } & ChipOpts) {
+/** A member's name followed by its chips (`bare`: name only); deleted accounts render muted. */
+export function Who({ view, id, bare, ...chips }: { view: ProjectViewDTO; id: string | null | undefined; bare?: boolean } & ChipOpts) {
   const name = nameOf(view, id);
   if (isDeleted(view, id)) return <span className="member-deleted">{name}</span>;
+  if (bare) return <>{name}</>;
   return (
     <>
       {name}
@@ -465,7 +468,7 @@ export function ParticipantsCard({ view }: { view: ProjectViewDTO }) {
           <li key={m.id} className="participants-row">
             <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={28} />
             <span className="grow">
-              <Who view={view} id={m.id} />
+              <Who view={view} id={m.id} bare />
             </span>
             <span className="participants-chips">
               <MemberChips view={view} id={m.id} you owner />

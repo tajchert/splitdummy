@@ -2265,14 +2265,6 @@
   font-weight: 600;
   vertical-align: 1px;
 }
-.chip-you {
-  background: var(--blue-soft);
-  color: var(--blue);
-}
-.chip-owner {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
 .chip-warn {
   background: var(--amber-soft);
   color: var(--ink);

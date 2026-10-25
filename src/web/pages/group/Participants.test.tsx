@@ -16,6 +16,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 it("lists everyone in a collapsed People card while settling", async () => {
+  await api.addMember("p_lisbon", { displayName: "Dawid" }, { idempotencyKey: "add-dawid" });
   const view = await api.getProject("p_lisbon");
   const roundId = view.current.round.id;
   const review = await api.getReview("p_lisbon", roundId);
@@ -35,4 +36,11 @@ it("lists everyone in a collapsed People card while settling", async () => {
   expect(details.textContent).toContain("Maya you owner");
   expect(details.textContent).toContain("Kai");
   expect(details.textContent).toContain("Ana");
+  expect(details.textContent).toContain("Dawid placeholder");
+  // Each chip shows once per row (the name itself carries none).
+  for (const row of details.querySelectorAll("li")) {
+    const chips = [...row.querySelectorAll(".chip-sm")].map((c) => c.textContent);
+    expect(chips).toEqual([...new Set(chips)]);
+    expect(row.querySelector(".grow .chip-sm")).toBeNull();
+  }
 });

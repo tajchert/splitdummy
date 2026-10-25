@@ -77,7 +77,7 @@ export function MembersCard({ view }: { view: ProjectViewDTO }) {
             <Avatar name={x.displayName} tone={toneFor(view, x.id)} size={32} />
             <div className="grow">
               <span className="member-name">
-                <Who view={view} id={x.id} you />
+                <Who view={view} id={x.id} you placeholder={false} />
               </span>
               <div className="tiny muted">
                 {x.kind === "PLACEHOLDER" ? <span className={`chip-sm${x.inviteState === "INVITE_EXPIRED" ? " chip-warn" : ""}`}>{memberRole(x)}</span> : memberRole(x)}
