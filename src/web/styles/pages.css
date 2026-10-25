@@ -666,6 +666,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ready-avatar-owner {
+  vertical-align: -2px;
+  margin-right: 2px;
+}
 .ready-list {
   list-style: none;
   margin: 0;

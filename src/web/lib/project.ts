@@ -16,16 +16,19 @@ export function member(view: Pick<ProjectViewDTO, "members">, id: string | null 
   return id ? view.members.find((m) => m.id === id) : undefined;
 }
 
-/** "Maya", or "Maya (you)" with `you`. Removed members keep their name. */
-export function nameOf(view: Pick<ProjectViewDTO, "members" | "me">, id: string | null | undefined, opts: { you?: boolean; short?: boolean } = {}): string {
+/** "Maya", "Maya (you)" with `you`, "Maya (owner)" / "Maya (you, owner)" with `owner`. Removed members keep their name. */
+export function nameOf(
+  view: Pick<ProjectViewDTO, "members" | "me">,
+  id: string | null | undefined,
+  opts: { you?: boolean; short?: boolean; owner?: boolean } = {},
+): string {
   if (!id) return "Someone";
   const m = member(view, id);
   const n = m?.displayName ?? "Former member";
-  if (id === view.me.memberId) {
-    if (opts.short) return "You";
-    if (opts.you) return `${n} (you)`;
-  }
-  return n;
+  const me = id === view.me.memberId;
+  if (me && opts.short) return "You";
+  const tags = [me && opts.you && "you", opts.owner && m?.isOwner && "owner"].filter(Boolean);
+  return tags.length ? `${n} (${tags.join(", ")})` : n;
 }
 
 export function isDeleted(view: Pick<ProjectViewDTO, "members">, id: string | null | undefined): boolean {

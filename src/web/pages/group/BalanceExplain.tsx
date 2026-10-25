@@ -40,7 +40,7 @@ export function BalanceExplain() {
           <select className="input select" value={who} onChange={(e) => setParams(e.target.value === view.me.memberId ? {} : { member: e.target.value }, { replace: true })}>
             {activeMembers(view).map((m) => (
               <option key={m.id} value={m.id}>
-                {nameOf(view, m.id, { you: true })}
+                {nameOf(view, m.id, { you: true, owner: true })}
               </option>
             ))}
           </select>

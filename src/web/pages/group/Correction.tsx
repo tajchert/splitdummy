@@ -181,7 +181,7 @@ export function Correction() {
         <div className="card card-flush">
           {people.map((id) => (
             <div key={id} className="row correction-row">
-              <span className="grow">{nameOf(view, id, { you: true })}</span>
+              <span className="grow">{nameOf(view, id, { you: true, owner: true })}</span>
               {mode === "reverse" ? (
                 <Amount minor={reverse[id]!} code={code} exponent={exp} signed tone="auto" />
               ) : (

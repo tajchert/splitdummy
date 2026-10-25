@@ -384,6 +384,7 @@ export function ReadinessCard({ view }: { view: ProjectViewDTO }) {
             <li key={m.id} className="ready-avatar">
               <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={40} ready={st.ready} dim={!st.ready} />
               <span className="ready-avatar-name">
+                {m.isOwner && <Icon name="workspace_premium" size={12} label="Owner:" className="ready-avatar-owner" />}
                 {m.id === view.me.memberId ? "You" : m.displayName}
                 <span className="sr-only">: {st.text}</span>
               </span>
@@ -398,7 +399,7 @@ export function ReadinessCard({ view }: { view: ProjectViewDTO }) {
             <li key={m.id} className="ready-list-row">
               <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={30} ready={st.ready} dim={!st.ready} />
               <span className="ready-list-name">
-                {nameOf(view, m.id, { you: true })}
+                {nameOf(view, m.id, { you: true, owner: true })}
                 {m.id === view.me.memberId && (
                   <Link to={`${base}/settings#your-name`} className="icon-btn icon-btn-xs" aria-label="Change your name in this group">
                     <Icon name="edit" size={15} />

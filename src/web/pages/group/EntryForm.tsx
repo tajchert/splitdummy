@@ -569,7 +569,7 @@ function SplitEditor({ d, ev, view, errors, update, ctx }: {
                 onChange={(e) => toggle(m.id, e.target.checked)}
               />
               <label htmlFor={`p-${m.id}`} className="grow split-name">
-                {nameOf(view, m.id, { you: true })} <PlaceholderTag member={m} hidden />
+                {nameOf(view, m.id, { you: true, owner: true })} <PlaceholderTag member={m} hidden />
               </label>
               {d.splitMode === "EQUAL" || !on ? (
                 <span className="split-share amount">{shareOf(m.id)}</span>
