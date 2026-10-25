@@ -1381,7 +1381,7 @@ export function createMockApi(): MockApi {
           roundId,
           reviewVersion: r.round.reviewVersion,
           ledgerVersion: r.round.ledgerVersion,
-          notReadyMemberIds: rv.readiness.filter((x) => !x.ready).map((x) => x.memberId),
+          notReadyMemberIds: rv.readiness.filter((x) => !x.ready && x.memberId !== p.project.ownerMemberId).map((x) => x.memberId),
           view: rv,
           proposedTransfers: planSettlement(nets).map((t) => ({ fromMemberId: t.from, toMemberId: t.to, amount: t.amount.toString() })),
         };
@@ -1393,8 +1393,11 @@ export function createMockApi(): MockApi {
         const r = collecting(p, roundId);
         const d = FreezeSchema.parse(body);
         if (d.expectedReviewVersion !== r.round.reviewVersion) fail(409, "REVIEW_STALE", "Something changed during review.", undefined, { currentReviewVersion: r.round.reviewVersion });
-        const notReady = roundView(p, r).readiness.filter((x) => !x.ready).map((x) => x.memberId).sort();
-        if (notReady.join() !== [...d.acknowledgeNotReady].sort().join()) fail(409, "NOT_READY_UNACKNOWLEDGED", "Confirm who isn't finished.", undefined, { notReady });
+        // Freezing marks the owner done; only other members need acknowledging.
+        const notReady = roundView(p, r).readiness.filter((x) => !x.ready && x.memberId !== m.id).map((x) => x.memberId).sort();
+        const acknowledged = [...new Set(d.acknowledgeNotReady)].filter((x) => x !== m.id).sort();
+        if (notReady.join() !== acknowledged.join()) fail(409, "NOT_READY_UNACKNOWLEDGED", "Confirm who isn't finished.", undefined, { notReady });
+        if (!r.readiness[m.id]?.ready) r.readiness[m.id] = { ready: true, markedAt: now() };
         freezeRound(p, r, m.id, notReady.length ? d.earlyFreezeReason || null : null);
         Object.assign(r.round, { scheduledFreezeDate: null, scheduledFreezeTimeZone: null, scheduledFreezeAt: null });
         refreshReferenced(p);

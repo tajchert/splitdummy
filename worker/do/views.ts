@@ -289,6 +289,11 @@ export function readinessList(store: Store, roundId: string): ReadinessDTO[] {
     });
 }
 
+/** Who the owner must acknowledge before freezing: everyone not ready except the owner, whose freeze marks them done. */
+export function notReadyOthers(readiness: ReadinessDTO[], ownerId: string): string[] {
+  return readiness.filter((r) => !r.ready && r.memberId !== ownerId).map((r) => r.memberId);
+}
+
 export function snapshotOf(store: Store, roundId: string): SnapshotData | undefined {
   const row = store.snapshot(roundId);
   return row ? (JSON.parse(row.snapshot_json) as SnapshotData) : undefined;
@@ -341,7 +346,7 @@ export function reviewView(store: Store, round: RoundRow): ReviewDTO {
     roundId: round.id,
     reviewVersion: round.review_version,
     ledgerVersion: round.ledger_version,
-    notReadyMemberIds: view.readiness.filter((r) => !r.ready).map((r) => r.memberId),
+    notReadyMemberIds: notReadyOthers(view.readiness, store.project()!.owner_member_id),
     view,
     proposedTransfers: planSettlement(nets).map((t) => ({
       fromMemberId: t.from,

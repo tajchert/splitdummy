@@ -20,11 +20,13 @@ import {
   entryDto,
   instructionDto,
   rateDto,
+  notReadyOthers,
   readinessList,
   roundDto,
   snapshotBalances,
   type SnapshotData,
 } from "../views";
+import { writeReadiness } from "./ledger";
 import { ok, type OpResult } from "./project";
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && new Set([...a, ...b]).size === a.length;
@@ -38,11 +40,15 @@ export function freeze(tx: Tx, req: DoRequest): OpResult {
       currentReviewVersion: round.review_version,
     });
   }
-  const readiness = readinessList(tx.store, round.id);
-  const notReady = readiness.filter((r) => !r.ready).map((r) => r.memberId);
-  if (!sameSet([...new Set(body.acknowledgeNotReady)], notReady)) {
+  // Freezing is the owner's own "done adding": only other members need acknowledging.
+  // Older clients still list the owner, so an acknowledgement of the owner is ignored.
+  const notReady = notReadyOthers(readinessList(tx.store, round.id), owner.id);
+  const acknowledged = [...new Set(body.acknowledgeNotReady)].filter((id) => id !== owner.id);
+  if (!sameSet(acknowledged, notReady)) {
     throw conflict("NOT_READY_UNACKNOWLEDGED", "Confirm that you're freezing before everyone is ready.", { notReady });
   }
+  writeReadiness(tx, round, owner, true);
+  const readiness = readinessList(tx.store, round.id);
   // The reason is optional; acknowledging who isn't ready is what's required.
   const earlyFreezeReason = notReady.length > 0 ? body.earlyFreezeReason?.trim() || null : null;
   freezeRound(tx, round, { owner, readiness, notReady, earlyFreezeReason, scheduled: false });

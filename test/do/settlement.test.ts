@@ -1,6 +1,6 @@
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import type { EntryDTO, FreezeResultDTO, HistoryDTO, InstructionResultDTO, ReviewDTO, RoundDTO, RoundViewDTO } from "@shared/api";
+import type { EntryDTO, FreezeResultDTO, HistoryDTO, InstructionResultDTO, ProjectViewDTO, ReviewDTO, RoundDTO, RoundViewDTO } from "@shared/api";
 import type { OutboxMessage } from "../../worker/do/types";
 import { Client, createGroup, errorCode, expense, freezeNow, type Group } from "./helpers";
 
@@ -23,28 +23,29 @@ describe("freeze (criteria 14–16)", () => {
     await ownerPaysForAll(g);
     await bob.ok("setReadiness", { roundId: g.roundId }, { ready: true });
     const review = await g.owner.ok<ReviewDTO>("getReview", { roundId: g.roundId }, null, null);
-    expect(review.notReadyMemberIds.sort()).toEqual([g.owner.memberId, carol.memberId].sort());
+    // The owner isn't ready either, but freezing is their own "done": only Carol needs acknowledging.
+    expect(review.notReadyMemberIds).toEqual([carol.memberId]);
     expect(review.proposedTransfers).toHaveLength(2);
 
     const freeze = (c: Client, body: object) => c.call("freeze", { roundId: g.roundId }, { expectedReviewVersion: review.reviewVersion, ...body });
     expect((await errorCode(freeze(bob, { acknowledgeNotReady: review.notReadyMemberIds }))).status).toBe(403);
     const unack = await errorCode(freeze(g.owner, {}));
     expect(unack).toMatchObject({ status: 409, code: "NOT_READY_UNACKNOWLEDGED" });
-    expect(unack.details.notReady.sort()).toEqual(review.notReadyMemberIds.sort());
-    expect((await errorCode(freeze(g.owner, { acknowledgeNotReady: [carol.memberId] }))).code).toBe("NOT_READY_UNACKNOWLEDGED");
-    expect((await errorCode(freeze(g.owner, { acknowledgeNotReady: [...review.notReadyMemberIds, bob.memberId] }))).code).toBe(
-      "NOT_READY_UNACKNOWLEDGED",
-    );
+    expect(unack.details.notReady).toEqual([carol.memberId]);
+    expect((await errorCode(freeze(g.owner, { acknowledgeNotReady: [bob.memberId] }))).code).toBe("NOT_READY_UNACKNOWLEDGED");
+    expect((await errorCode(freeze(g.owner, { acknowledgeNotReady: [carol.memberId, bob.memberId] }))).code).toBe("NOT_READY_UNACKNOWLEDGED");
 
     await carol.ok("setReadiness", { roundId: g.roundId }, { ready: true });
-    const stale = await errorCode(freeze(g.owner, { acknowledgeNotReady: [g.owner.memberId] }));
+    await carol.ok("setReadiness", { roundId: g.roundId }, { ready: false });
+    const stale = await errorCode(freeze(g.owner, { acknowledgeNotReady: [carol.memberId] }));
     expect(stale).toMatchObject({ status: 409, code: "REVIEW_STALE" });
     expect(stale.details.currentReviewVersion).toBeGreaterThan(review.reviewVersion);
 
     const fresh = await g.owner.ok<ReviewDTO>("getReview", { roundId: g.roundId }, null, null);
+    // Older clients still list the owner among the acknowledged; that's accepted.
     const res = await g.owner.ok<FreezeResultDTO>("freeze", { roundId: g.roundId }, {
       expectedReviewVersion: fresh.reviewVersion,
-      acknowledgeNotReady: [g.owner.memberId],
+      acknowledgeNotReady: [g.owner.memberId, carol.memberId],
       earlyFreezeReason: "Flight leaves soon",
     });
     expect(res.round).toMatchObject({ status: "SETTLING", earlyFreezeReason: "Flight leaves soon", frozenByMemberId: g.owner.memberId });
@@ -53,7 +54,10 @@ describe("freeze (criteria 14–16)", () => {
     );
     const history = await bob.ok<HistoryDTO>("getHistory", {}, null, null);
     const frozen = history.events.find((e) => e.action === "ROUND_FROZEN")!;
-    expect(frozen.details).toMatchObject({ earlyFreezeReason: "Flight leaves soon", acknowledgedNotReady: [g.owner.memberId] });
+    expect(frozen.details).toMatchObject({ earlyFreezeReason: "Flight leaves soon", acknowledgedNotReady: [carol.memberId] });
+    expect(history.events.some((e) => e.action === "READY_SET" && e.entityId === g.owner.memberId)).toBe(true);
+    const view = await bob.ok<ProjectViewDTO>("getProject", {}, null, null);
+    expect(view.current.readiness.filter((r) => !r.ready).map((r) => r.memberId)).toEqual([carol.memberId]);
 
     // Settling: no more edits, readiness, review or freeze.
     expect((await errorCode(bob.call("createEntry", { roundId: g.roundId }, expense(bob.memberId, [bob.memberId], "1")))).code).toBe(

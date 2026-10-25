@@ -50,6 +50,22 @@ describe("review & freeze", () => {
     await waitFor(async () => expect((await api.getProject("p_lisbon")).current.round.status).toBe("SETTLING"));
   });
 
+  it("doesn't ask the owner to acknowledge themselves; freezing marks them done", async () => {
+    const view = await api.getProject("p_lisbon");
+    await api.setReadiness("p_lisbon", view.current.round.id, { ready: false }, { idempotencyKey: "owner-not-ready" });
+    const freeze = vi.spyOn(api, "freeze");
+    renderAt(api, "/g/p_lisbon/review");
+    expect(await screen.findByText("Done when you freeze")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: /I'm freezing even though Kai, Ana aren't finished/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Freeze & start settling" })[0]!);
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: /Freeze & start settling/ }));
+
+    await waitFor(() => expect(freeze).toHaveBeenCalledTimes(1));
+    expect([...freeze.mock.calls[0]![2].acknowledgeNotReady!].sort()).toEqual(["m_ana", "m_kai"]);
+    const after = await api.getProject("p_lisbon");
+    expect(after.current.readiness.find((r) => r.memberId === after.me.memberId)?.ready).toBe(true);
+  });
+
   it("sends the reason when one is given and quotes it in the confirmation", async () => {
     const freeze = vi.spyOn(api, "freeze");
     renderAt(api, "/g/p_lisbon/review");

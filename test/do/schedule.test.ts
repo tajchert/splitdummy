@@ -189,7 +189,8 @@ describe("owner freeze reason is optional", () => {
     const g = await createGroup({ members: 2 });
     await ownerPaysForAll(g);
     const review = await g.owner.ok<ReviewDTO>("getReview", { roundId: g.roundId }, null, null);
-    expect(review.notReadyMemberIds).toHaveLength(3);
+    // Both members; the owner's own freeze marks them done.
+    expect(review.notReadyMemberIds.sort()).toEqual(g.members.map((m) => m.memberId).sort());
     const res = await g.owner.ok<FreezeResultDTO>("freeze", { roundId: g.roundId }, {
       expectedReviewVersion: review.reviewVersion,
       acknowledgeNotReady: review.notReadyMemberIds,

@@ -209,11 +209,14 @@ export function Review() {
             </h2>
             {members.map((m) => {
               const ok = !notReady.includes(m.id);
+              // The owner isn't asked to acknowledge themselves: freezing marks them done.
+              const doneOnFreeze = m.id === view.me.memberId && !rv.readiness.some((r) => r.memberId === m.id && r.ready);
               return (
                 <div key={m.id} className="ready-line">
                   <Icon name={ok ? "check_circle" : "error"} size={20} className={ok ? "green" : "amber"} />
                   <span className="grow">{nameOf(view, m.id, { you: true })}</span>
                   {!ok && <span className="tiny amber strong">Not finished</span>}
+                  {doneOnFreeze && <span className="tiny muted">Done when you freeze</span>}
                 </div>
               );
             })}

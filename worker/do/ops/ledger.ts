@@ -461,33 +461,33 @@ export function createAdjustment(tx: Tx, req: DoRequest): OpResult {
   return () => ok(entryDto(tx.store.loadEntry(id)!), 201);
 }
 
+/** Records a member's "done adding" flag with its audit event. Returns false when it was already set that way. */
+export function writeReadiness(tx: Tx, round: RoundRow, member: MemberRow, value: boolean): boolean {
+  const current = tx.store.first<{ ready: number }>("SELECT ready FROM readiness WHERE round_id = ? AND member_id = ?", round.id, member.id);
+  const ready = value ? 1 : 0;
+  if ((current?.ready ?? 0) === ready) return false;
+  tx.store.run(
+    `INSERT INTO readiness (round_id, member_id, ready, marked_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(round_id, member_id) DO UPDATE SET ready = excluded.ready, marked_at = excluded.marked_at`,
+    round.id,
+    member.id,
+    ready,
+    tx.now,
+  );
+  tx.audit(
+    value ? "READY_SET" : "READY_CLEARED",
+    value ? `${member.display_name} has added everything` : `${member.display_name} is still adding expenses`,
+    { roundId: round.id, entityId: member.id },
+  );
+  return true;
+}
+
 export function setReadiness(tx: Tx, req: DoRequest): OpResult {
   const me = tx.member();
   const round = tx.collectingRound(req.params.roundId);
   const body = parseBody(ReadinessSchema, req.body);
   if (me.status !== "ACTIVE") throw conflict("INVALID_TRANSITION", "You have left this group.");
-  const current = tx.store.first<{ ready: number; marked_at: string | null }>(
-    "SELECT ready, marked_at FROM readiness WHERE round_id = ? AND member_id = ?",
-    round.id,
-    me.id,
-  );
-  const ready = body.ready ? 1 : 0;
-  if ((current?.ready ?? 0) !== ready) {
-    tx.store.run(
-      `INSERT INTO readiness (round_id, member_id, ready, marked_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(round_id, member_id) DO UPDATE SET ready = excluded.ready, marked_at = excluded.marked_at`,
-      round.id,
-      me.id,
-      ready,
-      tx.now,
-    );
-    tx.reviewTouched();
-    tx.audit(
-      body.ready ? "READY_SET" : "READY_CLEARED",
-      body.ready ? `${me.display_name} has added everything` : `${me.display_name} is still adding expenses`,
-      { roundId: round.id, entityId: me.id },
-    );
-  }
+  if (writeReadiness(tx, round, me, body.ready)) tx.reviewTouched();
   const row = tx.store.first<{ ready: number; marked_at: string | null }>(
     "SELECT ready, marked_at FROM readiness WHERE round_id = ? AND member_id = ?",
     round.id,
