@@ -91,7 +91,8 @@ describe("owner stands in for placeholders", () => {
     const api = mockWith("pr_lea", (s) => settlingPorto(s, [["m_kai", "m_lea", "PROPOSED"]]));
     const received = vi.spyOn(api, "markReceived");
     renderAt(api, "/g/p_porto");
-    fireEvent.click(await screen.findByRole("button", { name: "I've received it" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Already received?" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Yes, I've received it" }));
     await waitFor(() => expect(received).toHaveBeenCalledWith("p_porto", expect.any(String), "i_0", expect.anything(), expect.anything()));
   });
 

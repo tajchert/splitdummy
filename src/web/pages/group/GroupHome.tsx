@@ -251,7 +251,7 @@ function Settling({ view }: { view: ProjectViewDTO }) {
           </div>
           <div className="transfers">
             {instructions.map((i) => (
-              <TransferCard key={i.id} view={view} i={i} />
+              <TransferCard key={i.id} view={view} i={i} canAct />
             ))}
           </div>
           <div className="settle-notes">
