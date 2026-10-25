@@ -40,19 +40,20 @@ export function PlaceholderTag({ member, hidden }: { member: MemberDTO | undefin
   );
 }
 
-/** A member's name with "you" / "owner" / "placeholder" chips; deleted accounts render muted. */
-export function Who({ view, id, you, owner, hidden }: { view: ProjectViewDTO; id: string | null | undefined; you?: boolean; owner?: boolean; hidden?: boolean }) {
-  const name = nameOf(view, id);
-  if (isDeleted(view, id)) return <span className="member-deleted">{name}</span>;
+type ChipOpts = { you?: boolean; owner?: boolean; hidden?: boolean };
+
+/** The "you" / "owner" / "placeholder" chips for a member, each led by a space. */
+export function MemberChips({ view, id, you, owner, hidden }: { view: ProjectViewDTO; id: string | null | undefined } & ChipOpts) {
+  if (isDeleted(view, id)) return null;
   const m = member(view, id);
-  const tags = [you && id === view.me.memberId && "you", owner && m?.isOwner && "owner"].filter((t): t is string => !!t);
+  const aria = hidden ? { "aria-hidden": true } : {};
+  const tags = [you && id === view.me.memberId && "you", owner && m?.isOwner && "owner"].filter((t): t is "you" | "owner" => !!t);
   return (
     <>
-      {name}
       {tags.map((t) => (
         <Fragment key={t}>
           {" "}
-          <span className="chip-sm" {...(hidden ? { "aria-hidden": true } : {})}>
+          <span className={`chip-sm chip-${t}`} {...aria}>
             {t}
           </span>
         </Fragment>
@@ -63,6 +64,18 @@ export function Who({ view, id, you, owner, hidden }: { view: ProjectViewDTO; id
           <PlaceholderTag member={m} hidden={hidden} />
         </>
       )}
+    </>
+  );
+}
+
+/** A member's name followed by its chips; deleted accounts render muted. */
+export function Who({ view, id, ...chips }: { view: ProjectViewDTO; id: string | null | undefined } & ChipOpts) {
+  const name = nameOf(view, id);
+  if (isDeleted(view, id)) return <span className="member-deleted">{name}</span>;
+  return (
+    <>
+      {name}
+      <MemberChips view={view} id={id} {...chips} />
     </>
   );
 }
@@ -452,7 +465,10 @@ export function ParticipantsCard({ view }: { view: ProjectViewDTO }) {
           <li key={m.id} className="participants-row">
             <Avatar name={m.displayName} tone={toneFor(view, m.id)} size={28} />
             <span className="grow">
-              <Who view={view} id={m.id} you owner />
+              <Who view={view} id={m.id} />
+            </span>
+            <span className="participants-chips">
+              <MemberChips view={view} id={m.id} you owner />
             </span>
           </li>
         ))}

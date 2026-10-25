@@ -662,6 +662,9 @@
 .participants-list {
   margin-top: 10px;
 }
+.participants-chips {
+  white-space: nowrap;
+}
 .participants-row {
   display: flex;
   align-items: center;
@@ -2261,6 +2264,14 @@
   font-size: 12px;
   font-weight: 600;
   vertical-align: 1px;
+}
+.chip-you {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.chip-owner {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 .chip-warn {
   background: var(--amber-soft);
