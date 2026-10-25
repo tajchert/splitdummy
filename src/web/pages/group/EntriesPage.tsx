@@ -1,12 +1,39 @@
+import { useEffect, useState } from "react";
 import { Outlet } from "react-router";
 import type { ProjectViewDTO, RoundViewDTO } from "@shared/api";
 import { BackButton } from "../../components/Shell";
+import { useToast } from "../../components/Toast";
 import { EmptyState, Icon, StatusPill } from "../../components/ui";
+import { entriesMarkdown } from "../../lib/entriesMarkdown";
 import { fmtMoney, plural } from "../../lib/format";
 import { roundLabel } from "../../lib/project";
 import { useView } from "../../state/project";
 import type { RoundOutletContext } from "./EntryDetail";
 import { CurrencySubtotals, EntryRow, groupBase, sortEntries } from "./parts";
+
+function CopyMarkdownButton({ text }: { text: () => string }) {
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text());
+      setCopied(true);
+      toast("Table copied as Markdown");
+    } catch {
+      toast("Couldn't copy the table.", "error");
+    }
+  };
+  return (
+    <button type="button" className="icon-btn icon-btn-xs" onClick={() => void copy()} aria-label="Copy table as Markdown" title="Copy table as Markdown">
+      <Icon name={copied ? "check" : "content_copy"} size={16} />
+    </button>
+  );
+}
 
 /** Read-only entry list for one round (current frozen round, or a historical one). */
 export function RoundEntries({ view, round, basePath }: { view: ProjectViewDTO; round: RoundViewDTO; basePath: string }) {
@@ -19,6 +46,7 @@ export function RoundEntries({ view, round, basePath }: { view: ProjectViewDTO; 
       </div>
     );
   }
+  const entries = sortEntries(round.entries);
   return (
     <div className="card card-flush entry-table">
       <div className="entry-thead desktop-only-grid" aria-hidden="true">
@@ -28,12 +56,15 @@ export function RoundEntries({ view, round, basePath }: { view: ProjectViewDTO; 
         <span className="ta-r">Amount</span>
       </div>
       <div className="rows">
-        {sortEntries(round.entries).map((e) => (
+        {entries.map((e) => (
           <EntryRow key={e.id} view={view} e={e} to={`${basePath}/${encodeURIComponent(e.id)}`} />
         ))}
       </div>
       <div className="entry-tfoot">
-        <CurrencySubtotals round={round} />
+        <span className="entry-tfoot-start">
+          <CopyMarkdownButton text={() => entriesMarkdown(view, round, entries)} />
+          <CurrencySubtotals round={round} />
+        </span>
         <b className="ink amount">
           {fmtMoney(round.totals.expenses, code, exp)} spent
           {round.totals.refunds !== "0" && <> · {fmtMoney(round.totals.refunds, code, exp)} refunded</>}

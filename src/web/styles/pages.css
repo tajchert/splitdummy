@@ -837,6 +837,12 @@
   color: var(--ink2);
   border-top: 1px solid var(--line);
 }
+.entry-tfoot-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block: -4px;
+}
 @media (min-width: 860px) {
   .entry-table {
     border-radius: 18px;
