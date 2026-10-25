@@ -13,6 +13,7 @@ import { accountDeletionInfo, anonymizeMember, deletionPrincipals } from "./ops/
 import { acceptOwnership, createInvite, createProject, deleteRate, join, leave, previewInvite, principalUpdated, putRate, removeMember, renameMe, revokeInvite, transferOwnership, updateSettings, type OpResult } from "./ops/project";
 import { acceptMemberInvite, addMember, cancelMemberInvite, inviteMember, previewMemberInvite, renameMember } from "./ops/members";
 import { ackAttachmentTrash, readAttachment, registerAttachment, takeAttachmentTrash } from "./ops/attachments";
+import { digestDueAt, sendExpenseDigest } from "./ops/digest";
 import { createAdjustment, createEntry, deleteEntry, setReadiness, updateEntry } from "./ops/ledger";
 import { backupSnapshot, exportCsv, getHistory, getProject, getReview, getRound } from "./ops/read";
 import { freeze, markDisputed, markReceived, markSent, scheduledFreeze, setFreezeSchedule, startRound } from "./ops/settlement";
@@ -310,11 +311,11 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
     }
   }
 
-  // ---------- alarm: scheduled freeze + outbox ----------
+  // ---------- alarm: scheduled freeze + expense digest + outbox ----------
 
   /**
-   * One alarm serves both the scheduled freeze and outbox publication. Never throws (a throwing
-   * alarm is retried by the runtime); always re-arms for whatever is due next.
+   * One alarm serves the scheduled freeze, the expense digest and outbox publication. Never throws
+   * (a throwing alarm is retried by the runtime); always re-arms for whatever is due next.
    */
   async alarm(): Promise<void> {
     let freezeFailed = false;
@@ -323,6 +324,14 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
     } catch (err) {
       freezeFailed = true;
       logError("scheduled freeze failed", err);
+    }
+    try {
+      this.ctx.storage.transactionSync(() => {
+        const tx = new Tx(this.store, null);
+        if (sendExpenseDigest(tx, Date.now())) tx.finish();
+      });
+    } catch (err) {
+      logError("expense digest failed", err);
     }
     try {
       await this.publishOutbox();
@@ -379,8 +388,8 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
   }
 
   /**
-   * Sets the alarm to exactly min(next outbox retry, scheduled freeze instant), or clears it when
-   * neither is pending. Derived from durable state each time, so it's safe to call after any change.
+   * Sets the alarm to exactly min(next outbox retry, scheduled freeze instant, digest due time), or
+   * clears it when none is pending. Derived from durable state each time, so it's safe to call after any change.
    */
   private async armAlarm(freezeFailed = false): Promise<void> {
     const now = Date.now();
@@ -392,6 +401,8 @@ export class ProjectDO extends DurableObject<Env> implements ProjectDORpc {
     const due: number[] = [];
     if (outbox?.t !== null && outbox?.t !== undefined) due.push(Number(outbox.t));
     if (round?.at) due.push(freezeFailed ? now + SCHEDULED_FREEZE_RETRY_MS : Date.parse(round.at));
+    const digest = digestDueAt(this.store);
+    if (digest !== null) due.push(digest);
     const current = await this.ctx.storage.getAlarm();
     if (due.length === 0) {
       if (current !== null) await this.ctx.storage.deleteAlarm();

@@ -52,6 +52,7 @@ async function notify(env: Env, msg: Notify): Promise<void> {
 
   const content = notificationEmail({
     summary: msg.payload.summary,
+    lines: msg.payload.lines,
     projectUrl: `${env.APP_ORIGIN}/projects/${encodeURIComponent(msg.projectId)}`,
   });
   let failures = 0;
@@ -83,6 +84,10 @@ function isOutboxMessage(body: unknown): body is OutboxMessage {
   const payload = m.payload as Record<string, unknown> | null | undefined;
   if (typeof payload !== "object" || payload === null) return false;
   if (m.type === "DIRECTORY_UPSERT") return Array.isArray(payload.members) && typeof payload.name === "string";
-  if (m.type === "NOTIFY") return Array.isArray(payload.principalIds) && typeof payload.summary === "string";
+  if (m.type === "NOTIFY") {
+    const lines = payload.lines;
+    const linesOk = lines === undefined || (Array.isArray(lines) && lines.every((l) => typeof l === "string"));
+    return Array.isArray(payload.principalIds) && typeof payload.summary === "string" && linesOk;
+  }
   return false;
 }

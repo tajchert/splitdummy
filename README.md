@@ -49,6 +49,7 @@ Forgot something after the freeze? Start a **new round**. Frozen rounds are neve
 | 📸 **Notes and receipt photos** | A note and up to 5 bill photos per expense, shrunk in the browser with location data stripped |
 | ⏰ **Freeze deadline** | Optionally freeze the list automatically on a chosen date |
 | 👥 **People without accounts** | Owner adds people by name, invites them by email, and stands in for them when settling |
+| 📬 **Expense digest emails** | New expenses are batched into one email per group, sent an hour after the last one is added |
 | 🤝 **Settlement tracking** | Sent → received or disputed, at most *n − 1* transfers |
 | ⚡ **Live updates** | Changes appear instantly for everyone via WebSockets |
 | 🧾 **Audit history and CSV export** | Every change is recorded; export a group to CSV |

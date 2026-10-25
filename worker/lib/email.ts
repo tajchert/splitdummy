@@ -62,13 +62,15 @@ export function signInEmail(link: string, purpose: "SIGN_IN" | "ATTACH"): EmailC
   };
 }
 
-export function notificationEmail(opts: { summary: string; projectUrl: string }): EmailContent {
+export function notificationEmail(opts: { summary: string; lines?: string[]; projectUrl: string }): EmailContent {
   const subject = `Splitdummy: ${opts.summary}`.slice(0, 160);
   const footer = "You're receiving this because you're a member of this Splitdummy group.";
+  const lines = opts.lines ?? [];
+  const body = lines.length > 0 ? `\n\n${lines.map((l) => `- ${l}`).join("\n")}` : "";
   return {
     subject,
-    text: `${opts.summary}\n\nOpen the group: ${opts.projectUrl}\n\n${footer}\n`,
-    html: layout({ heading: opts.summary, paragraphs: [], action: { label: "Open the group", url: opts.projectUrl }, footer }),
+    text: `${opts.summary}${body}\n\nOpen the group: ${opts.projectUrl}\n\n${footer}\n`,
+    html: layout({ heading: opts.summary, paragraphs: lines, action: { label: "Open the group", url: opts.projectUrl }, footer }),
   };
 }
 

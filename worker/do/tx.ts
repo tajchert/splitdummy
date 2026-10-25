@@ -18,7 +18,7 @@ export class Tx {
   changed = false;
   private ledgerChanged = false;
   private reviewChanged = false;
-  private notifications: { kind: NotifyKind; memberIds: string[]; summary: string }[] = [];
+  private notifications: { kind: NotifyKind; memberIds: string[]; summary: string; lines?: string[] }[] = [];
   /** Members whose live sockets should be closed after commit (removed members). */
   readonly disconnect: string[] = [];
   private cachedMember: MemberRow | undefined;
@@ -139,17 +139,19 @@ export class Tx {
     this.changed = true;
   }
 
-  notify(kind: NotifyKind, memberIds: string[], summary: string): void {
-    this.notifications.push({ kind, memberIds, summary });
+  notify(kind: NotifyKind, memberIds: string[], summary: string, lines?: string[]): void {
+    this.notifications.push({ kind, memberIds, summary, ...(lines ? { lines } : {}) });
   }
 
   /**
    * Finalize: bump versions, write outbox rows. Returns the new project version and whether
-   * any outbox row was written (so the caller can arm the alarm after commit).
+   * any outbox row was written (so the caller can arm the alarm after commit). Notifications
+   * alone (the expense digest) are written without bumping the version.
    */
   finish(): { projectVersion: number; outbox: boolean } {
     const project = this.store.project();
-    if (!project || !this.changed) return { projectVersion: project?.version ?? 0, outbox: false };
+    if (!project || (!this.changed && this.notifications.length === 0)) return { projectVersion: project?.version ?? 0, outbox: false };
+    if (!this.changed) return { projectVersion: project.version, outbox: this.writeNotifications(project.id, project.version) };
     const version = project.version + 1;
     this.store.run("UPDATE project SET version = ? WHERE id = ?", version, project.id);
     if (project.active_round_id && (this.ledgerChanged || this.reviewChanged)) {
@@ -161,22 +163,7 @@ export class Tx {
       );
     }
 
-    let outbox = false;
-    const principals = new Map(this.store.members().map((m) => [m.id, m.principal_id]));
-    for (const n of this.notifications) {
-      const principalIds = [
-        ...new Set(n.memberIds.map((id) => principals.get(id)).filter((p): p is string => !!p && !isPlaceholderPrincipal(p))),
-      ];
-      if (principalIds.length === 0) continue;
-      this.writeOutbox({
-        id: newId("o"),
-        type: "NOTIFY",
-        projectId: project.id,
-        projectVersion: version,
-        payload: { kind: n.kind, principalIds, summary: n.summary },
-      });
-      outbox = true;
-    }
+    let outbox = this.writeNotifications(project.id, version);
 
     // Directory projection: publish only when what the directory shows actually changed.
     const directory = directoryPayload(this.store);
@@ -191,6 +178,26 @@ export class Tx {
       outbox = true;
     }
     return { projectVersion: version, outbox };
+  }
+
+  private writeNotifications(projectId: string, version: number): boolean {
+    let outbox = false;
+    const principals = new Map(this.store.members().map((m) => [m.id, m.principal_id]));
+    for (const n of this.notifications) {
+      const principalIds = [
+        ...new Set(n.memberIds.map((id) => principals.get(id)).filter((p): p is string => !!p && !isPlaceholderPrincipal(p))),
+      ];
+      if (principalIds.length === 0) continue;
+      this.writeOutbox({
+        id: newId("o"),
+        type: "NOTIFY",
+        projectId,
+        projectVersion: version,
+        payload: { kind: n.kind, principalIds, summary: n.summary, ...(n.lines ? { lines: n.lines } : {}) },
+      });
+      outbox = true;
+    }
+    return outbox;
   }
 
   private writeOutbox(message: OutboxMessage): void {

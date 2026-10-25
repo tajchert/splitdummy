@@ -141,8 +141,10 @@ export type OutboxMessage =
       projectId: string;
       projectVersion: number;
       payload: {
-        kind: "ROUND_FROZEN" | "TRANSFER_SENT" | "TRANSFER_CONFIRMED" | "TRANSFER_DISPUTED" | "ROUND_SETTLED";
+        kind: "ROUND_FROZEN" | "TRANSFER_SENT" | "TRANSFER_CONFIRMED" | "TRANSFER_DISPUTED" | "ROUND_SETTLED" | "EXPENSES_ADDED";
         principalIds: string[];
         summary: string;
+        /** Optional detail lines (the expense digest lists one per entry). */
+        lines?: string[];
       };
     };

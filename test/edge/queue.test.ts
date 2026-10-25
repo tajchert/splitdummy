@@ -144,6 +144,22 @@ describe("NOTIFY", () => {
     expect(sent.html).toContain("<html");
   });
 
+  it("lists the digest lines in the email", async () => {
+    const a = await principal(`a-${uid()}@example.com`);
+    const send = vi.fn(async () => ({ messageId: "x" }));
+    const env = { ...testEnv, EMAIL: { send } } as unknown as Env;
+    const msg = notify([a]);
+    if (msg.type === "NOTIFY") {
+      msg.payload = { kind: "EXPENSES_ADDED", principalIds: [a], summary: "2 new expenses in “Trip”", lines: ["Bob added “Taxi” · 10.00 PLN", "Bob added <b>"] };
+    }
+    await processMessage(env, msg);
+    const sent = (send.mock.calls[0] as unknown[])[0] as { subject: string; text: string; html: string };
+    expect(sent.subject).toBe("Splitdummy: 2 new expenses in “Trip”");
+    expect(sent.text).toContain("- Bob added “Taxi” · 10.00 PLN\n- Bob added <b>");
+    expect(sent.html).toContain("Bob added “Taxi” · 10.00 PLN");
+    expect(sent.html).toContain("Bob added &lt;b&gt;");
+  });
+
   it("retries on send failure without re-mailing recipients that already succeeded", async () => {
     const a = await principal(`a-${uid()}@example.com`);
     const b = await principal(`b-${uid()}@example.com`);

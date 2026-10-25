@@ -28,6 +28,7 @@ import { newId, type Tx } from "../tx";
 import type { DoRequest } from "../types";
 import { entryDto } from "../views";
 import { extrasSummary, normalizeNote, setEntryAttachments, trashEntryAttachments } from "./attachments";
+import { queueDigest } from "./digest";
 import { ok, rateErrorMessage, type OpResult } from "./project";
 
 interface PreparedEntry {
@@ -256,6 +257,7 @@ export function createEntry(tx: Tx, req: DoRequest): OpResult {
   writeSplits(tx, id, p);
   if (input.attachmentIds?.length) setEntryAttachments(tx, id, input.attachmentIds, me);
   lockBaseCurrency(tx);
+  queueDigest(tx, id);
   tx.financial();
   tx.clearReadiness([me.id]);
   const label = input.type === "EXPENSE" ? "expense" : "refund";

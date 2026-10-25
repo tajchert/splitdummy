@@ -240,6 +240,12 @@ const MIGRATIONS: string[] = [
     trashed_at TEXT NOT NULL
   );
   `,
+  `
+  CREATE TABLE expense_digest (
+    entry_id TEXT PRIMARY KEY REFERENCES entries(id),
+    added_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

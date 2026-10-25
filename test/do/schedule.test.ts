@@ -17,8 +17,9 @@ async function ownerPaysForAll(g: Group) {
   return g.owner.ok<EntryDTO>("createEntry", { roundId: g.roundId }, expense(g.owner.memberId, ids, String(1000 * ids.length)));
 }
 
-/** Publishes pending outbox rows so the alarm reflects only the schedule. */
+/** Publishes pending outbox rows and drops the expense digest so the alarm reflects only the schedule. */
 async function flushOutbox(g: Group) {
+  await sqlIn(g.stub, "DELETE FROM expense_digest");
   await runDurableObjectAlarm(g.stub);
 }
 
