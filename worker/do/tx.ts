@@ -151,7 +151,7 @@ export class Tx {
   finish(): { projectVersion: number; outbox: boolean } {
     const project = this.store.project();
     if (!project || (!this.changed && this.notifications.length === 0)) return { projectVersion: project?.version ?? 0, outbox: false };
-    if (!this.changed) return { projectVersion: project.version, outbox: this.writeNotifications(project.id, project.version) };
+    if (!this.changed) return { projectVersion: project.version, outbox: this.writeNotifications(project.id, project.name, project.version) };
     const version = project.version + 1;
     this.store.run("UPDATE project SET version = ? WHERE id = ?", version, project.id);
     if (project.active_round_id && (this.ledgerChanged || this.reviewChanged)) {
@@ -163,7 +163,7 @@ export class Tx {
       );
     }
 
-    let outbox = this.writeNotifications(project.id, version);
+    let outbox = this.writeNotifications(project.id, project.name, version);
 
     // Directory projection: publish only when what the directory shows actually changed.
     const directory = directoryPayload(this.store);
@@ -180,7 +180,7 @@ export class Tx {
     return { projectVersion: version, outbox };
   }
 
-  private writeNotifications(projectId: string, version: number): boolean {
+  private writeNotifications(projectId: string, projectName: string, version: number): boolean {
     let outbox = false;
     const principals = new Map(this.store.members().map((m) => [m.id, m.principal_id]));
     for (const n of this.notifications) {
@@ -193,7 +193,7 @@ export class Tx {
         type: "NOTIFY",
         projectId,
         projectVersion: version,
-        payload: { kind: n.kind, principalIds, summary: n.summary, ...(n.lines ? { lines: n.lines } : {}) },
+        payload: { kind: n.kind, principalIds, summary: n.summary, projectName, ...(n.lines ? { lines: n.lines } : {}) },
       });
       outbox = true;
     }

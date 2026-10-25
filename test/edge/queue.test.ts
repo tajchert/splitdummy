@@ -160,6 +160,23 @@ describe("NOTIFY", () => {
     expect(sent.html).toContain("Bob added &lt;b&gt;");
   });
 
+  it("celebrates a settled round with the finish flag and the group name", async () => {
+    const a = await principal(`a-${uid()}@example.com`);
+    const send = vi.fn(async () => ({ messageId: "x" }));
+    const env = { ...testEnv, EMAIL: { send } } as unknown as Env;
+    const msg = notify([a]);
+    if (msg.type === "NOTIFY") {
+      msg.payload = { kind: "ROUND_SETTLED", principalIds: [a], summary: "“NYC <2026>” is all settled.", projectName: "NYC <2026>" };
+    }
+    await processMessage(env, msg);
+    const sent = (send.mock.calls[0] as unknown[])[0] as { subject: string; text: string; html: string };
+    expect(sent.subject).toBe("🏁 “NYC <2026>” is all settled.");
+    expect(sent.text).toContain("All settled.");
+    expect(sent.text).toContain("/projects/");
+    expect(sent.html).toContain("/email/finish-flag.gif");
+    expect(sent.html).toContain("NYC &lt;2026&gt; is squared away.");
+  });
+
   it("retries on send failure without re-mailing recipients that already succeeded", async () => {
     const a = await principal(`a-${uid()}@example.com`);
     const b = await principal(`b-${uid()}@example.com`);

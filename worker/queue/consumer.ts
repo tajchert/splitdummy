@@ -51,6 +51,8 @@ async function notify(env: Env, msg: Notify): Promise<void> {
     .all<{ id: string; email: string }>();
 
   const content = notificationEmail({
+    kind: msg.payload.kind,
+    ...(msg.payload.projectName ? { projectName: msg.payload.projectName } : {}),
     summary: msg.payload.summary,
     lines: msg.payload.lines,
     projectUrl: `${env.APP_ORIGIN}/projects/${encodeURIComponent(msg.projectId)}`,
@@ -87,7 +89,8 @@ function isOutboxMessage(body: unknown): body is OutboxMessage {
   if (m.type === "NOTIFY") {
     const lines = payload.lines;
     const linesOk = lines === undefined || (Array.isArray(lines) && lines.every((l) => typeof l === "string"));
-    return Array.isArray(payload.principalIds) && typeof payload.summary === "string" && linesOk;
+    const nameOk = payload.projectName === undefined || typeof payload.projectName === "string";
+    return Array.isArray(payload.principalIds) && typeof payload.summary === "string" && linesOk && nameOk;
   }
   return false;
 }
