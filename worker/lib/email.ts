@@ -2,6 +2,8 @@ import { isProduction } from "./env";
 import { logError } from "./log";
 
 export interface EmailContent {
+  /** Fixed, non-personal label; the only description of an email that may appear in logs. */
+  kind: string;
   subject: string;
   text: string;
   html: string;
@@ -17,11 +19,13 @@ function parseFrom(from: string): EmailAddress {
  * binding is tolerated (local dev has no real Email Service); callers decide whether to fail.
  */
 export async function sendEmail(env: Env, to: string, content: EmailContent): Promise<boolean> {
+  const { kind, ...message } = content;
   try {
-    await env.EMAIL.send({ to, from: parseFrom(env.EMAIL_FROM), ...content });
+    await env.EMAIL.send({ to, from: parseFrom(env.EMAIL_FROM), ...message });
     return true;
   } catch (err) {
-    logError("email send failed", err, { subject: content.subject, production: isProduction(env) });
+    // Subjects carry member, group and amount text, so only the fixed kind is logged.
+    logError("email send failed", err, { kind, production: isProduction(env) });
     return false;
   }
 }
@@ -115,6 +119,7 @@ export function signInEmail(link: string, purpose: "SIGN_IN" | "ATTACH"): EmailC
   const footer = "This link works once and expires in 15 minutes. If you didn't ask for it, you can ignore this email.";
   const label = attach ? "Confirm email" : "Sign in";
   return {
+    kind: attach ? "attach_email" : "sign_in",
     subject,
     text: `${intro}\n\n${label}: ${link}\n\n${footer}\n`,
     html: layout({ heading: subject, paragraphs: [intro], action: { label, url: link }, footer }),
@@ -139,6 +144,7 @@ export function notificationEmail(opts: {
     const intro = "Every payment is done and confirmed, so nobody owes anyone anything. Nice work, everyone.";
     const label = "See the summary";
     return {
+      kind: "ROUND_SETTLED",
       subject,
       text: `All settled.\n\n${sub}\n\n${intro}${body}\n\n${label}: ${opts.projectUrl}\n\n${footer}\n`,
       html: layout({
@@ -155,6 +161,7 @@ export function notificationEmail(opts: {
 
   const subject = `Splitdummy: ${opts.summary}`.slice(0, 160);
   return {
+    kind: opts.kind ?? "notification",
     subject,
     text: `${opts.summary}${body}\n\nOpen the group: ${opts.projectUrl}\n\n${footer}\n`,
     html: layout({
@@ -173,6 +180,7 @@ export function memberInviteEmail(opts: { inviterName: string; projectName: stri
   const footer = `This invitation works until ${opts.expiresAt.slice(0, 10)} (UTC). Joining confirms this email address. If you weren't expecting it, you can ignore this email.`;
   const label = `Join ${opts.projectName}`.slice(0, 60);
   return {
+    kind: "member_invite",
     subject,
     text: `${intro}\n\n${label}: ${opts.url}\n\n${footer}\n`,
     html: layout({ heading: subject, paragraphs: [intro], action: { label, url: opts.url }, footer }),
