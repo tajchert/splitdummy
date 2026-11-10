@@ -80,7 +80,7 @@ Keep the database model capable of multiple contributions, but expose one payer 
 
 The creator is the initial owner. Owner reassignment is allowed only while collecting, requires the target member to have a recoverable account and explicitly accept, and leaves exactly one owner. Never use a display name as an identity or permission key.
 
-Participants cannot be removed if any ledger entry or settlement references them. An owner can remove an unreferenced member while collecting. Leaving a referenced group may hide it from a member’s dashboard, but retains their accounting identity and obligations.
+Participants cannot be removed if any ledger entry or settlement references them. An owner can remove an unreferenced member while collecting. Leaving a referenced group may hide it from a member’s dashboard, but retains their accounting identity and obligations. A member who has left can still read the group and settle their own transfers, but cannot add or change anything until they rejoin.
 
 ## 4. Project and round lifecycle
 

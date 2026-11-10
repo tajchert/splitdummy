@@ -1,6 +1,6 @@
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import type { InvitationPreviewDTO, MemberDTO, ProjectDTO } from "@shared/api";
+import type { EntryDTO, InvitationPreviewDTO, MemberDTO, ProjectDTO } from "@shared/api";
 import { PRINCIPAL_HEADER } from "../../worker/do/types";
 import { Client, createGroup, errorCode, expense, freezeNow, inviteToken, joinGroup, makePrincipal, stubFor } from "./helpers";
 
@@ -221,6 +221,70 @@ describe("membership changes (criterion 22)", () => {
     expect(view.current.readiness.every((r) => !r.ready)).toBe(true);
     expect(view.invitations).not.toBeNull();
     expect((await errorCode(g.owner.call("createInvite"))).status).toBe(403);
+  });
+});
+
+describe("members who left", () => {
+  const meta = { contentType: "image/webp", bytes: 1234, width: 1600, height: 1200, sha256: "a".repeat(64) };
+
+  /** Bob paid an entry, then left (still referenced, so he stays LEFT). */
+  async function groupWithLeftBob() {
+    const g = await createGroup({ members: 1 });
+    const bob = g.members[0]!;
+    const entry = await bob.ok<EntryDTO>("createEntry", { roundId: g.roundId }, expense(bob.memberId, [g.owner.memberId, bob.memberId], "1000"));
+    expect(await bob.ok<MemberDTO>("leave")).toMatchObject({ status: "LEFT" });
+    return { g, bob, entry };
+  }
+
+  it("cannot add, change or delete anything in the ledger, and the ledger stays as it was", async () => {
+    const { g, bob, entry } = await groupWithLeftBob();
+    const before = (await g.owner.view()).current.entries;
+    const conflicted = { status: 409, code: "INVALID_TRANSITION" };
+    const params = { roundId: g.roundId };
+    const entryParams = { roundId: g.roundId, entryId: entry.id };
+    const input = expense(bob.memberId, [g.owner.memberId, bob.memberId], "2000");
+
+    expect(await errorCode(bob.call("createEntry", params, input))).toMatchObject(conflicted);
+    expect(await errorCode(bob.call("updateEntry", entryParams, { ...input, expectedRevision: entry.revision }))).toMatchObject(conflicted);
+    expect(await errorCode(bob.call("deleteEntry", entryParams, { expectedRevision: entry.revision }))).toMatchObject(conflicted);
+    expect(await errorCode(bob.call("registerAttachment", {}, meta))).toMatchObject(conflicted);
+    expect(await errorCode(bob.call("renameMe", {}, { displayName: "Robert" }))).toMatchObject(conflicted);
+    expect(await errorCode(bob.call("setReadiness", params, { ready: true }))).toMatchObject(conflicted);
+
+    expect((await g.owner.view()).current.entries).toEqual(before);
+    expect((await g.owner.view()).members.find((m) => m.id === bob.memberId)?.displayName).toBe("Bob");
+    // Reading still works.
+    expect((await bob.view()).me.memberId).toBe(bob.memberId);
+  });
+
+  it("can still settle their own transfers once the round is frozen", async () => {
+    const { g, bob } = await groupWithLeftBob();
+    const { instructions } = await freezeNow(g);
+    // Bob paid 1000 for two, so the owner owes him: he is the recipient.
+    const owed = instructions.find((i: { toMemberId: string }) => i.toMemberId === bob.memberId)!;
+    await g.owner.ok("markSent", { roundId: g.roundId, instructionId: owed.id });
+    const confirmed = await bob.call("markReceived", { roundId: g.roundId, instructionId: owed.id }, {});
+    expect(confirmed.status).toBe(200);
+  });
+
+  it("can send their own transfer when they are the one who owes", async () => {
+    const g = await createGroup({ members: 1 });
+    const bob = g.members[0]!;
+    await g.owner.ok("createEntry", { roundId: g.roundId }, expense(g.owner.memberId, [g.owner.memberId, bob.memberId], "1000"));
+    expect(await bob.ok<MemberDTO>("leave")).toMatchObject({ status: "LEFT", referenced: true });
+    const { instructions } = await freezeNow(g);
+    const owes = instructions.find((i: { fromMemberId: string }) => i.fromMemberId === bob.memberId)!;
+    const sent = await bob.call("markSent", { roundId: g.roundId, instructionId: owes.id }, {});
+    expect(sent.status).toBe(200);
+  });
+
+  it("can write again after rejoining through the group link", async () => {
+    const { g, bob } = await groupWithLeftBob();
+    const token = await inviteToken(g);
+    await bob.ok("join", { tokenSecret: token }, { displayName: "Bob" });
+    expect((await g.owner.view()).members.find((m) => m.id === bob.memberId)?.status).toBe("ACTIVE");
+    const created = await bob.call("createEntry", { roundId: g.roundId }, expense(bob.memberId, [g.owner.memberId, bob.memberId], "2000"));
+    expect(created.status).toBe(201);
   });
 });
 

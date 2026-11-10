@@ -41,7 +41,7 @@ export class Tx {
     return p;
   }
 
-  /** Current member for the principal; ACTIVE or LEFT (LEFT members keep their obligations). */
+  /** Current member for the principal; ACTIVE or LEFT (LEFT members keep their obligations). Reads and settlement only: writes use activeMember(). */
   member(): MemberRow {
     if (this.cachedMember) return this.cachedMember;
     if (!this.principal) throw unauthenticated();
@@ -49,6 +49,13 @@ export class Tx {
     const m = this.store.memberByPrincipal(this.principal.principalId);
     if (!m || m.status === "REMOVED") throw notFound();
     this.cachedMember = m;
+    return m;
+  }
+
+  /** The acting member, who must not have left: LEFT members can read, settle and rejoin, nothing else. */
+  activeMember(): MemberRow {
+    const m = this.member();
+    if (m.status !== "ACTIVE") throw conflict("INVALID_TRANSITION", "You have left this group.");
     return m;
   }
 

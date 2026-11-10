@@ -216,7 +216,7 @@ function describe(p: PreparedEntry): string {
 }
 
 export function createEntry(tx: Tx, req: DoRequest): OpResult {
-  const me = tx.member();
+  const me = tx.activeMember();
   const round = tx.collectingRound(req.params.roundId);
   const input = parseBody(EntryInputSchema, req.body);
   checkEntryCount(tx, round.id);
@@ -289,7 +289,7 @@ function checkRevision(row: EntryRow, expected: number): void {
 }
 
 export function updateEntry(tx: Tx, req: DoRequest): OpResult {
-  const me = tx.member();
+  const me = tx.activeMember();
   const round = tx.collectingRound(req.params.roundId);
   const body = parseBody(UpdateEntrySchema, req.body);
   const row = editableEntry(tx, req, round, me);
@@ -349,7 +349,7 @@ export function updateEntry(tx: Tx, req: DoRequest): OpResult {
 }
 
 export function deleteEntry(tx: Tx, req: DoRequest): OpResult {
-  const me = tx.member();
+  const me = tx.activeMember();
   const round = tx.collectingRound(req.params.roundId);
   const body = parseBody(DeleteEntrySchema, req.body);
   const row = editableEntry(tx, req, round, me);
@@ -483,10 +483,9 @@ export function writeReadiness(tx: Tx, round: RoundRow, member: MemberRow, value
 }
 
 export function setReadiness(tx: Tx, req: DoRequest): OpResult {
-  const me = tx.member();
+  const me = tx.activeMember();
   const round = tx.collectingRound(req.params.roundId);
   const body = parseBody(ReadinessSchema, req.body);
-  if (me.status !== "ACTIVE") throw conflict("INVALID_TRANSITION", "You have left this group.");
   if (writeReadiness(tx, round, me, body.ready)) tx.reviewTouched();
   const row = tx.store.first<{ ready: number; marked_at: string | null }>(
     "SELECT ready, marked_at FROM readiness WHERE round_id = ? AND member_id = ?",

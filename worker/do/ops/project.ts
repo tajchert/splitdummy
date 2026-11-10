@@ -421,7 +421,7 @@ export function leave(tx: Tx): DoResponse {
 
 /** Own display name in this group. Identity, not money: allowed in any round state; names may repeat. */
 export function renameMe(tx: Tx, req: DoRequest): OpResult {
-  const me = tx.member();
+  const me = tx.activeMember();
   if (tx.project.members_can_rename !== 1 && tx.project.owner_member_id !== me.id) {
     throw forbidden("The owner manages names in this group.");
   }

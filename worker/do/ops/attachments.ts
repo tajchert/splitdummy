@@ -39,7 +39,7 @@ const RegisterSchema = z.object({
 const AckSchema = z.object({ ids: z.array(IdSchema).max(ATTACHMENT_TRASH_BATCH) });
 
 export function registerAttachment(tx: Tx, req: DoRequest): OpResult {
-  const me = tx.member();
+  const me = tx.activeMember();
   if (tx.activeRound()?.status !== "COLLECTING") throw notCollecting();
   const body = parseBody(RegisterSchema, req.body);
   const pending = tx.store.count("SELECT COUNT(*) AS n FROM attachments WHERE entry_id IS NULL AND uploader_member_id = ?", me.id);
