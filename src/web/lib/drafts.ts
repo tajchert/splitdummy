@@ -1,7 +1,8 @@
 import { withDraftDefaults, type EntryDraft } from "./entryForm";
 
 /** Local, unsent entry drafts. Never shown as saved; the UI labels them "Not saved". */
-const key = (projectId: string, slot: string) => `splitdummy-draft:${projectId}:${slot}`;
+const PREFIX = "splitdummy-draft:";
+const key = (projectId: string, slot: string) => `${PREFIX}${projectId}:${slot}`;
 
 export function loadDraft(projectId: string, slot: string): EntryDraft | null {
   try {
@@ -28,6 +29,20 @@ export function clearDraft(projectId: string, slot: string): void {
   }
 }
 
+/** Everything unsent on this device, for sign-out and account deletion (shared devices). */
+export function clearAllDrafts(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(PREFIX)) keys.push(k);
+    }
+    for (const k of keys) localStorage.removeItem(k);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** A draft rejected because its round froze: offered again for the next round. */
 export function findRejectedDraft(projectId: string): { slot: string; draft: EntryDraft } | null {
   try {
@@ -35,8 +50,12 @@ export function findRejectedDraft(projectId: string): { slot: string; draft: Ent
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k?.startsWith(prefix)) continue;
-      const d = JSON.parse(localStorage.getItem(k) ?? "null") as EntryDraft | null;
-      if (d?.rejected) return { slot: k.slice(prefix.length), draft: withDraftDefaults(d) };
+      try {
+        const d = JSON.parse(localStorage.getItem(k) ?? "null") as EntryDraft | null;
+        if (d?.rejected) return { slot: k.slice(prefix.length), draft: withDraftDefaults(d) };
+      } catch {
+        /* one corrupt value must not hide the others */
+      }
     }
   } catch {
     /* ignore */

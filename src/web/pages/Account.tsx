@@ -10,6 +10,7 @@ import { useToast } from "../components/Toast";
 import { Turnstile } from "../components/Turnstile";
 import { Sheet } from "../components/Dialog";
 import { Banner, Icon, Loading } from "../components/ui";
+import { clearAllDrafts } from "../lib/drafts";
 import { plural } from "../lib/format";
 import { getThemePref, setThemePref, type ThemePref } from "../lib/theme";
 import { useEmailLinkForm } from "./SignIn";
@@ -108,6 +109,7 @@ function AccountInner() {
           onClick={async () => {
             try {
               await signOut.run("logout", (k) => api.signOut({ idempotencyKey: k }));
+              clearAllDrafts();
               setMe(null);
               toast("Signed out", "info");
               navigate("/");
@@ -216,6 +218,7 @@ export function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
     setError(null);
     try {
       await sub.run("delete-account", (k) => api.deleteAccount({ confirm: "DELETE" }, { idempotencyKey: k }));
+      clearAllDrafts();
       setMe(null);
       toast("Your account was deleted", "info");
       navigate("/", { replace: true });

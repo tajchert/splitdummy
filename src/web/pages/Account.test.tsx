@@ -44,6 +44,7 @@ describe("delete account", () => {
   it("enables deletion only after typing DELETE, then signs out to the landing page", async () => {
     const api = mockAs("pr_lea");
     const del = vi.spyOn(api, "deleteAccount");
+    localStorage.setItem("splitdummy-draft:p_porto:new-EXPENSE", "{}");
     renderAt(api, "/account");
     const dialog = await openDialog();
     expect(await within(dialog).findByText("Porto weekend")).toBeTruthy();
@@ -67,6 +68,7 @@ describe("delete account", () => {
     // Landed on the landing page.
     expect(await screen.findByText(/Joining a group from an invitation\?/)).toBeTruthy();
     expect(await api.getMe()).toBeNull();
+    expect(localStorage.getItem("splitdummy-draft:p_porto:new-EXPENSE")).toBeNull();
   });
 
   it("is blocked while joined groups have unconfirmed transfers", async () => {
@@ -90,6 +92,26 @@ describe("delete account", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete account" }));
     expect(await within(dialog).findByText("Some of your transfers aren't confirmed yet.")).toBeTruthy();
     expect(await api.getMe()).not.toBeNull();
+  });
+});
+
+describe("sign out", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    window.history.replaceState(null, "", "/?latency=0");
+  });
+  afterEach(() => cleanup());
+
+  it("removes unsent drafts from this device", async () => {
+    const api = mockAs("pr_lea");
+    localStorage.setItem("splitdummy-draft:p_porto:new-EXPENSE", "{}");
+    localStorage.setItem("splitdummy-draft:p_lisbon:edit-e1", "{}");
+    renderAt(api, "/account");
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    expect(await screen.findByText("Signed out")).toBeTruthy();
+    expect(localStorage.getItem("splitdummy-draft:p_porto:new-EXPENSE")).toBeNull();
+    expect(localStorage.getItem("splitdummy-draft:p_lisbon:edit-e1")).toBeNull();
+    expect(localStorage.getItem("splitdummy-mock-v3")).not.toBeNull();
   });
 });
 
