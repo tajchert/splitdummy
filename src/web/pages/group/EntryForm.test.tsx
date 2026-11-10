@@ -324,6 +324,123 @@ describe("expense form", () => {
     await waitFor(() => expect(Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)!).some((k) => k.startsWith(`splitdummy-draft:${pid}`))).toBe(true));
   });
 
+  describe("unsent drafts", () => {
+    const entryBody = (payer: string, description: string) => ({
+      type: "EXPENSE" as const,
+      description,
+      occurredAt: "2026-03-01",
+      originalAmount: "4200",
+      originalCurrency: "EUR",
+      conversion: { method: "IDENTITY" as const },
+      payerMemberId: payer,
+      splitMode: "EQUAL" as const,
+      participants: [{ memberId: payer }],
+    });
+    const draftKeys = (pid: string) =>
+      Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)!).filter((k) => k.startsWith(`splitdummy-draft:${pid}`));
+    const descriptionInput = () => screen.getByLabelText("What was it?", { selector: "input" }) as HTMLInputElement;
+
+    /** An entry, then a draft of it edited on this device, then another member's newer edit. */
+    async function staleEditDraft() {
+      const view = await newSingleCurrencyGroup(api);
+      const pid = view.project.id;
+      const rid = view.current.round.id;
+      const me = view.me.memberId;
+      await api.createEntry(pid, rid, entryBody(me, "Groceries"), { idempotencyKey: crypto.randomUUID() });
+      const entry = (await api.getProject(pid)).current.entries[0]!;
+      renderAt(api, `/g/${pid}/e/${entry.id}/edit`);
+      fireEvent.change(await screen.findByLabelText("What was it?", { selector: "input" }), { target: { value: "Groceries (mine)" } });
+      const draftKey = `splitdummy-draft:${pid}:edit-${entry.id}`;
+      await waitFor(() => expect(JSON.parse(localStorage.getItem(draftKey) ?? "{}").baseRevision).toBe(entry.revision));
+      cleanup();
+      await api.updateEntry(pid, rid, entry.id, { ...entryBody(me, "Groceries (theirs)"), expectedRevision: entry.revision }, { idempotencyKey: crypto.randomUUID() });
+      expect((await api.getProject(pid)).current.entries[0]!.revision).toBeGreaterThan(entry.revision);
+      renderAt(api, `/g/${pid}/e/${entry.id}/edit`);
+      await screen.findByText("Someone else changed this entry");
+      return { pid, entry, draftKey, description: async () => (await api.getProject(pid)).current.entries[0]!.description };
+    }
+
+    it("does not save a stale edit draft over someone else's change", async () => {
+      const { description } = await staleEditDraft();
+      expect(descriptionInput().value).toBe("Groceries (mine)");
+      const update = vi.spyOn(api, "updateEntry");
+      fireEvent.submit(document.getElementById("entry-form")!);
+      await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+      expect(await description()).toBe("Groceries (theirs)");
+      expect(await screen.findByText("Someone else changed this entry")).toBeTruthy();
+    });
+
+    it("loads the latest version when asked to", async () => {
+      const { draftKey } = await staleEditDraft();
+      fireEvent.click(screen.getByRole("button", { name: "Use latest" }));
+      await waitFor(() => expect(descriptionInput().value).toBe("Groceries (theirs)"));
+      expect(screen.queryByText("Someone else changed this entry")).toBeNull();
+      expect(localStorage.getItem(draftKey)).toBeNull();
+    });
+
+    it("replaces their change only after choosing to keep the draft", async () => {
+      const { description } = await staleEditDraft();
+      fireEvent.click(screen.getByRole("button", { name: "Keep mine" }));
+      expect(screen.queryByText("Someone else changed this entry")).toBeNull();
+      fireEvent.submit(document.getElementById("entry-form")!);
+      await waitFor(async () => expect(await description()).toBe("Groceries (mine)"));
+    });
+
+    /** A complete draft the form itself stored, marked as rejected by the current round. */
+    async function seedRejectedDraft() {
+      const view = await newSingleCurrencyGroup(api);
+      const pid = view.project.id;
+      renderAt(api, `/g/${pid}/new`);
+      fireEvent.change(await screen.findByLabelText("What was it?", { selector: "input" }), { target: { value: "Lift passes" } });
+      fireEvent.change(screen.getByRole("textbox", { name: "Amount" }), { target: { value: "90" } });
+      const key = `splitdummy-draft:${pid}:new-EXPENSE`;
+      await waitFor(() => expect(JSON.parse(localStorage.getItem(key) ?? "{}").amount).toBe("90"));
+      cleanup();
+      const stored = JSON.parse(localStorage.getItem(key)!);
+      localStorage.setItem(key, JSON.stringify({ ...stored, rejected: true, roundSequence: view.current.round.sequence }));
+      return { pid, key };
+    }
+
+    it("clears a rejected draft restored from another slot once it is saved", async () => {
+      const { pid } = await seedRejectedDraft();
+      renderAt(api, `/g/${pid}/refund`);
+      expect(await screen.findByText("Not saved")).toBeTruthy();
+      expect(descriptionInput().value).toBe("Lift passes");
+      fireEvent.submit(document.getElementById("entry-form")!);
+      await waitFor(async () => expect((await api.getProject(pid)).current.entries.filter((e) => e.description === "Lift passes")).toHaveLength(1));
+      await waitFor(() => expect(draftKeys(pid)).toEqual([]));
+    });
+
+    it("keeps a single rejected copy, without a base revision, when an edit meets a frozen round", async () => {
+      const view = await newSingleCurrencyGroup(api);
+      const pid = view.project.id;
+      const rid = view.current.round.id;
+      await api.createEntry(pid, rid, entryBody(view.me.memberId, "Groceries"), { idempotencyKey: crypto.randomUUID() });
+      const entry = (await api.getProject(pid)).current.entries[0]!;
+      renderAt(api, `/g/${pid}/e/${entry.id}/edit`);
+      fireEvent.change(await screen.findByLabelText("What was it?", { selector: "input" }), { target: { value: "Groceries (late)" } });
+      await waitFor(() => expect(draftKeys(pid)).toEqual([`splitdummy-draft:${pid}:edit-${entry.id}`]));
+
+      const review = await api.getReview(pid, rid);
+      await api.freeze(pid, rid, { expectedReviewVersion: review.reviewVersion, acknowledgeNotReady: review.notReadyMemberIds, earlyFreezeReason: "Done" }, { idempotencyKey: crypto.randomUUID() });
+      fireEvent.submit(document.getElementById("entry-form")!);
+      await screen.findByText("Not saved");
+      await waitFor(() => expect(draftKeys(pid)).toEqual([`splitdummy-draft:${pid}:new-EXPENSE`]));
+      expect(JSON.parse(localStorage.getItem(`splitdummy-draft:${pid}:new-EXPENSE`)!)).toMatchObject({ description: "Groceries (late)", rejected: true });
+      expect(JSON.parse(localStorage.getItem(`splitdummy-draft:${pid}:new-EXPENSE`)!).baseRevision).toBeUndefined();
+    });
+
+    it("lets a rejected draft be discarded", async () => {
+      const { pid, key } = await seedRejectedDraft();
+      renderAt(api, `/g/${pid}/new`);
+      await screen.findByText("Not saved");
+      fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+      await waitFor(() => expect(screen.queryByText("Not saved")).toBeNull());
+      expect(descriptionInput().value).toBe("");
+      expect(localStorage.getItem(key)).toBeNull();
+    });
+  });
+
   it("stays open when the photo picker is cancelled, and still closes on Escape", async () => {
     const view = await newSingleCurrencyGroup(api);
     renderAt(api, `/g/${view.project.id}/new`);

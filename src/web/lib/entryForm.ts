@@ -38,6 +38,8 @@ export interface EntryDraft {
   savedAt?: string;
   rejected?: boolean;
   roundSequence?: number;
+  /** The entry revision an edit draft was started from. */
+  baseRevision?: number;
 }
 
 export interface FormContext {

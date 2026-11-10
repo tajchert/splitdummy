@@ -59,12 +59,14 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
   const round = view.current.round;
   const collecting = round.status === "COLLECTING";
 
-  const [restored] = useState(() => {
+  // Where the restored draft came from (a rejected one may come from another slot), so saving or discarding clears that copy too.
+  const [restoredFrom, setRestoredFrom] = useState<{ draft: EntryDraft; slot: string } | null>(() => {
     const own = loadDraft(view.project.id, slot);
-    if (own) return own;
-    if (!entry) return findRejectedDraft(view.project.id)?.draft ?? null;
+    if (own) return { draft: own, slot };
+    if (!entry) return findRejectedDraft(view.project.id);
     return null;
   });
+  const restored = restoredFrom?.draft ?? null;
   const [d, setD] = useState<EntryDraft>(
     () =>
       (restored ? { ...restored, rejected: restored.rejected && restored.roundSequence === round.sequence } : null) ??
@@ -75,6 +77,9 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
   const [showErrors, setShowErrors] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   const [stale, setStale] = useState(false);
+  // The revision this edit is based on; saving sends it, so a newer change by someone else is never replaced unknowingly.
+  const [baseRev, setBaseRev] = useState<number | undefined>(() => (entry ? restored?.baseRevision ?? entry.revision : undefined));
+  const changedElsewhere = !!entry && baseRev !== entry.revision;
 
   const ev = evaluateEntry(d, ctx);
   const errors = { ...(showErrors ? ev.errors : {}), ...serverErrors };
@@ -93,13 +98,28 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
       firstRun.current = false;
       return;
     }
-    if (touched) saveDraft(view.project.id, slot, d);
-  }, [d, touched, slot, view.project.id]);
+    // A rejected draft of an edit lives under the new-expense slot already (see submit).
+    if (touched && !(entry && d.rejected)) saveDraft(view.project.id, slot, entry ? { ...d, baseRevision: baseRev } : d);
+  }, [d, touched, slot, view.project.id, baseRev]);
 
   const update = (patch: Partial<EntryDraft>) => {
     setTouched(true);
     setServerErrors({});
     setD((x) => ({ ...x, ...patch }));
+  };
+
+  // Back to the entry as it is now (or an empty form), forgetting the draft everywhere it was stored.
+  const reset = () => {
+    clearDraft(view.project.id, slot);
+    if (restoredFrom) clearDraft(view.project.id, restoredFrom.slot);
+    setRestoredFrom(null);
+    const fresh = entry ? draftFromEntry(entry, sep) : emptyDraft(type, view, todayYmd(), members.map((m) => m.id));
+    setD(fresh);
+    photos.reset(fresh.attachmentIds);
+    setBaseRev(entry?.revision);
+    setStale(false);
+    setTouched(false);
+    setServerErrors({});
   };
 
   const discardAndClose = () => {
@@ -127,12 +147,13 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
     const body = { ...ev.body, attachmentIds: photos.ids };
     noteSelfReadyChange();
     try {
-      await run({ body, entry: entry?.id, rev: entry?.revision }, (k) =>
+      await run({ body, entry: entry?.id, rev: baseRev }, (k) =>
         entry
-          ? api.updateEntry(view.project.id, entry.roundId, entry.id, { ...body, expectedRevision: entry.revision }, { idempotencyKey: k })
+          ? api.updateEntry(view.project.id, entry.roundId, entry.id, { ...body, expectedRevision: baseRev! }, { idempotencyKey: k })
           : api.createEntry(view.project.id, round.id, body, { idempotencyKey: k }),
       );
       clearDraft(view.project.id, slot);
+      if (restoredFrom) clearDraft(view.project.id, restoredFrom.slot);
       await refresh();
       toast(entry ? (isRefund ? "Refund updated" : "Expense updated") : isRefund ? "Refund saved" : "Expense saved");
       navigate(groupBase(view.project.id), { replace: true });
@@ -142,9 +163,12 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
         return;
       }
       if (err.code === "ROUND_NOT_COLLECTING") {
-        const keep = { ...d, attachmentIds: photos.ids, rejected: true, roundSequence: round.sequence + 1 };
-        saveDraft(view.project.id, entry ? "new-EXPENSE" : slot, keep);
-        if (entry) clearDraft(view.project.id, slot);
+        const { baseRevision: _base, ...rest } = d;
+        const keep = { ...rest, attachmentIds: photos.ids, rejected: true, roundSequence: round.sequence + 1 };
+        const target = entry ? "new-EXPENSE" : slot;
+        saveDraft(view.project.id, target, keep);
+        if (slot !== target) clearDraft(view.project.id, slot);
+        if (restoredFrom && restoredFrom.slot !== target) clearDraft(view.project.id, restoredFrom.slot);
         setD(keep);
         void refresh();
         return;
@@ -211,7 +235,16 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
     >
       <form id="entry-form" className="entry-form" onSubmit={submit} noValidate>
         {d.rejected && (
-          <Banner tone="red" icon="cloud_off" role="alert">
+          <Banner
+            tone="red"
+            icon="cloud_off"
+            role="alert"
+            action={
+              <button type="button" className="btn btn-sm btn-ghost" onClick={reset}>
+                Discard
+              </button>
+            }
+          >
             Not saved
             <p>
               {collecting
@@ -225,16 +258,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
             tone="amber"
             icon="edit_note"
             action={
-              <button
-                type="button"
-                className="btn btn-sm btn-ghost"
-                onClick={() => {
-                  clearDraft(view.project.id, slot);
-                  const fresh = entry ? draftFromEntry(entry, sep) : emptyDraft(type, view, todayYmd(), members.map((m) => m.id));
-                  setD(fresh);
-                  photos.reset(fresh.attachmentIds);
-                }}
-              >
+              <button type="button" className="btn btn-sm btn-ghost" onClick={reset}>
                 Discard
               </button>
             }
@@ -243,10 +267,32 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
             <p>From {fmtDateTime(restored.savedAt, true)}. Not saved yet.</p>
           </Banner>
         )}
-        {stale && (
-          <Banner tone="amber" icon="sync_problem" role="alert">
+        {(stale || changedElsewhere) && (
+          <Banner
+            tone="amber"
+            icon="sync_problem"
+            role="alert"
+            action={
+              <span>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={reset}>
+                  Use latest
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => {
+                    setBaseRev(entry?.revision);
+                    setStale(false);
+                    setTouched(true);
+                  }}
+                >
+                  Keep mine
+                </button>
+              </span>
+            }
+          >
             Someone else changed this entry
-            <p>Your version wasn't saved. Close and reopen it to see the latest, then make your change again.</p>
+            <p>Your version isn't saved. Use the latest version, or keep yours and save again to replace theirs.</p>
           </Banner>
         )}
         <div className="ef-grid ef-grid-desc">
