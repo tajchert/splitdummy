@@ -134,7 +134,7 @@ npx wrangler r2 bucket create splitdummy-staging-attachments
 
 ```bash
 scripts/deploy.sh staging --init-secrets   # first deploy of an environment
-scripts/deploy.sh production               # typecheck, build, migrate D1, deploy
+scripts/deploy.sh production               # typecheck, test, build, migrate D1, deploy, check the live site
 ```
 
 </details>

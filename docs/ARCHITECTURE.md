@@ -59,7 +59,10 @@ The web app, Worker and Durable Objects all depend on these. Extend them additiv
 scripts/deploy.sh staging                  # → https://staging.splitdummy.app
 scripts/deploy.sh production               # → https://splitdummy.app
 scripts/deploy.sh <env> --init-secrets     # first deploy of an env: uploads TURNSTILE_SECRET from the widget via `cf`
+scripts/deploy.sh <env> --dry-run          # rehearsal: everything up to `wrangler deploy --dry-run`, no migration, no live check
+scripts/deploy.sh <env> --skip-tests       # skip `npm test` (prints a warning)
+scripts/deploy.sh production --allow-dirty # deploy production with uncommitted changes (refused by default; staging only warns)
 ```
 
-The script regenerates Worker types, typechecks, builds with Vite (`CLOUDFLARE_ENV` selects the env), applies D1 migrations remotely, then deploys.
+The script regenerates Worker types, typechecks, runs the tests, builds with Vite from a clean `dist/` (`CLOUDFLARE_ENV` selects the env; any `.dev.vars*` file is removed from the output), applies D1 migrations remotely, then deploys. Afterwards it checks the environment's `APP_ORIGIN`: `/` must answer 200 and `/api/me` without a cookie 401 (a missing `x-frame-options` header only warns), otherwise it exits non-zero.
 Local dev: `cp .dev.vars.example .dev.vars && npm run dev` (Turnstile test keys, devLink sign-in). UI-only: `VITE_MOCK=1 npm run dev`.
