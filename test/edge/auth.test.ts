@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getPrincipal } from "../../worker/auth/principals";
+import { createSession, sessionCookieName } from "../../worker/auth/session";
 import { sha256Hex } from "../../worker/lib/crypto";
 import type { SignInRequestedDTO, SignInVerifiedDTO } from "@shared/api";
 import {
+  ORIGIN,
   call,
   guestSession,
   mockProjectDO,
@@ -238,6 +241,14 @@ describe("guest upgrade", () => {
     return { cookie: g.cookie, principalId: g.principalId };
   }
 
+  /** A second, independent session for the same guest (another browser or device). */
+  async function secondSession(principalId: string): Promise<string> {
+    const principal = await getPrincipal(testEnv.DB, principalId);
+    if (!principal) throw new Error("guest principal missing");
+    const { token } = await createSession(testEnv.DB, principal);
+    return `${sessionCookieName(ORIGIN)}=${token}`;
+  }
+
   it("sign-in from an un-emailed guest session upgrades that principal in place and notifies its DOs", async () => {
     const guest = await joinAsGuest();
     vi.restoreAllMocks();
@@ -264,6 +275,49 @@ describe("guest upgrade", () => {
     const cookie = sessionCookie(verify);
     const me = await (await call("/api/me", { cookie })).json<{ principalId: string; kind: string; email: string }>();
     expect(me).toMatchObject({ principalId: guest.principalId, kind: "ACCOUNT", email });
+  });
+
+  it("sign-in upgrade revokes every other session of the guest", async () => {
+    const guest = await joinAsGuest();
+    const other = await secondSession(guest.principalId);
+    expect((await call("/api/me", { cookie: other })).status).toBe(200);
+    const email = uniqueEmail("revoke-signin");
+    const { token } = await requestLink(email, {}, guest.cookie);
+    // Verified in a different browser: no cookie, so the route cannot retire the guest sessions itself.
+    const verify = await verifyToken(token);
+    const cookie = sessionCookie(verify);
+    expect(cookie).not.toBeNull();
+    expect((await call("/api/me", { cookie: other })).status).toBe(401);
+    expect((await call("/api/me", { cookie: guest.cookie })).status).toBe(401);
+    const me = await call("/api/me", { cookie });
+    expect(me.status).toBe(200);
+    expect(await me.json()).toMatchObject({ principalId: guest.principalId, kind: "ACCOUNT", email });
+  });
+
+  it("attach upgrade revokes every other session of the guest", async () => {
+    const guest = await joinAsGuest();
+    const other = await secondSession(guest.principalId);
+    expect((await call("/api/me", { cookie: other })).status).toBe(200);
+    const email = uniqueEmail("revoke-attach");
+    const res = await call("/api/me/email", { body: { email, turnstileToken: "ok" }, cookie: guest.cookie });
+    expect(res.status).toBe(200);
+    const { devLink } = await res.json<SignInRequestedDTO>();
+    const verify = await verifyToken(tokenFromLink(devLink ?? ""));
+    const cookie = sessionCookie(verify);
+    expect(cookie).not.toBeNull();
+    expect((await call("/api/me", { cookie: other })).status).toBe(401);
+    expect((await call("/api/me", { cookie: guest.cookie })).status).toBe(401);
+    const me = await call("/api/me", { cookie });
+    expect(me.status).toBe(200);
+    expect(await me.json()).toMatchObject({ principalId: guest.principalId, kind: "ACCOUNT", email });
+  });
+
+  it("an ordinary account sign-in keeps the account's other sessions", async () => {
+    const email = uniqueEmail("keep");
+    const first = await signIn(email);
+    const second = await signIn(email);
+    expect((await call("/api/me", { cookie: first })).status).toBe(200);
+    expect((await call("/api/me", { cookie: second })).status).toBe(200);
   });
 
   it("attaching an email that already has an account keeps the guest session unchanged", async () => {

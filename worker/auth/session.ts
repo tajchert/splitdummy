@@ -52,6 +52,14 @@ export async function revokeSession(db: D1Database, tokenHash: string): Promise<
     .run();
 }
 
+/** Ends every live session of a principal, on any browser or device. */
+export async function revokeAllSessions(db: D1Database, principalId: string): Promise<void> {
+  await db
+    .prepare("UPDATE sessions SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL")
+    .bind(Date.now(), principalId)
+    .run();
+}
+
 export function readSessionCookie(c: Context): string | undefined {
   return getCookie(c, sessionCookieName(c.req.url));
 }

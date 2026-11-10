@@ -12,7 +12,7 @@ import {
 import type { Principal } from "../do/types";
 import { getSession, requireSession } from "../auth/middleware";
 import { findByEmail, findOrCreateAccount, toPrincipal, upgradeGuest, type PrincipalRow } from "../auth/principals";
-import { clearSessionCookie, createSession, revokeSession, writeSessionCookie } from "../auth/session";
+import { clearSessionCookie, createSession, revokeAllSessions, revokeSession, writeSessionCookie } from "../auth/session";
 import { consumeSignInToken, issueSignInToken, type SignInPurpose } from "../auth/signin";
 import { verifyTurnstile } from "../auth/turnstile";
 import type { AppContext, AppEnv } from "../lib/context";
@@ -122,9 +122,12 @@ authRoutes.post("/api/auth/verify", async (c) => {
     target ??= await findOrCreateAccount(c.env.DB, row.email);
   }
 
-  // Fresh session on every privilege change (no fixation); retire the one this browser held.
+  // Fresh session on every privilege change (no fixation); retire the one this browser held. A session
+  // opened while the principal was an anonymous guest must not survive it becoming a verified account,
+  // so an upgrade retires them all; a plain sign-in leaves the account's other devices signed in.
   const previous = await getSession(c);
   if (previous) await revokeSession(c.env.DB, previous.tokenHash);
+  if (upgraded) await revokeAllSessions(c.env.DB, target.id);
   const { token, expiresAt } = await createSession(c.env.DB, target);
   writeSessionCookie(c, token, expiresAt);
 
