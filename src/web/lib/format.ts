@@ -48,15 +48,19 @@ const shortDateFmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "s
 const dateTimeFmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const shortDateTimeFmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
+// Date-only values are built at 12:00 UTC, so they must be formatted in UTC too; in UTC+12 and later that instant is already the next local day.
+const dayFmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const shortDayFmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" });
+
 /** "YYYY-MM-DD" occurredAt → "13 Sep 2026" (calendar date, no timezone shift). */
 export function fmtDay(ymd: string, short = false): string {
   const [y, m, d] = ymd.split("-").map(Number);
   const dt = new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1, 12));
-  return (short ? shortDateFmt : dateFmt).format(dt);
+  return (short ? shortDayFmt : dayFmt).format(dt);
 }
 
-const weekdayFmt = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short" });
-const weekdayYearFmt = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const weekdayFmt = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const weekdayYearFmt = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 /** "YYYY-MM-DD" → "Mon 20 Oct" (with the year when it isn't this year). Calendar date, no timezone shift. */
 export function fmtWeekday(ymd: string): string {
