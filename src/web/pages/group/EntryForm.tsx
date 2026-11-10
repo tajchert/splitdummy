@@ -79,7 +79,9 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
   const [stale, setStale] = useState(false);
   // The revision this edit is based on; saving sends it, so a newer change by someone else is never replaced unknowingly.
   const [baseRev, setBaseRev] = useState<number | undefined>(() => (entry ? restored?.baseRevision ?? entry.revision : undefined));
-  const changedElsewhere = !!entry && baseRev !== entry.revision;
+  // True from sending until the request fails (stays true after success, the form closes): our own save raises the revision.
+  const [submitting, setSubmitting] = useState(false);
+  const changedElsewhere = !!entry && !submitting && baseRev !== entry.revision;
 
   const ev = evaluateEntry(d, ctx);
   const errors = { ...(showErrors ? ev.errors : {}), ...serverErrors };
@@ -146,6 +148,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
     // The hook's ids, not the draft's: the draft catches up one render after an upload finishes.
     const body = { ...ev.body, attachmentIds: photos.ids };
     noteSelfReadyChange();
+    setSubmitting(true);
     try {
       await run({ body, entry: entry?.id, rev: baseRev }, (k) =>
         entry
@@ -158,6 +161,7 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
       toast(entry ? (isRefund ? "Refund updated" : "Expense updated") : isRefund ? "Refund saved" : "Expense saved");
       navigate(groupBase(view.project.id), { replace: true });
     } catch (err) {
+      setSubmitting(false);
       if (!(err instanceof ApiError)) {
         setServerErrors({ _form: errorMessage(err) });
         return;
@@ -169,6 +173,8 @@ function EntryForm({ view, entry, type, onClose }: { view: ProjectViewDTO; entry
         saveDraft(view.project.id, target, keep);
         if (slot !== target) clearDraft(view.project.id, slot);
         if (restoredFrom && restoredFrom.slot !== target) clearDraft(view.project.id, restoredFrom.slot);
+        // So Discard clears this copy too.
+        setRestoredFrom({ draft: keep, slot: target });
         setD(keep);
         void refresh();
         return;
